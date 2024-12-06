@@ -27,8 +27,8 @@ class SlicingEnv(Env):
         dm0 = np.sum([self.oran.get_total_delay(0, n, m) for n in range(4) for m in range(3)])
         dm1 = np.sum([self.oran.get_total_delay(1, n, m) for n in range(4) for m in range(3)])
 
-        Pk0 = self.oran.Pk0
-        Pk1 = self.oran.Pk1
+        Pk0 = self.oran.BSs[0].bs_power
+        Pk1 = self.oran.BSs[1].bs_power
 
         if action_type == 'power':
             state_info = [[Hn0, dm0, Pk0], [Hn1, dm1, Pk1]]
@@ -40,11 +40,10 @@ class SlicingEnv(Env):
     def step(self, action, action_type):
 
         # 1. Perform the action at ORAN
-        for k in range(self.oran.num_gnbs):
-            if action_type == 'power':
-                self.oran.set_power(k, action[k])
-            else:
-                self.oran.set_rbs(k, action[k])
+        if action_type == 'power':
+            self.oran.set_power(action)
+        else:
+            self.oran.set_rbs(action)
 
         # 2. Calculate the reward
         self.reward = self.oran.get_total_reward()
@@ -239,15 +238,16 @@ class ORAN:
                     # 4.3 Update the look up dict of RBs
                         self.dict_rbs[r] = 1
 
-    def set_power(self, kth, a):
+    def set_power(self, a):
         assert self.tx_power_min <= a <= self.tx_power_max
 
-        self.BSs[kth].bs_power = a
+        for k in range(self.num_gnbs):
+            self.BSs[k].bs_power = a[k]
 
-        indices = [rb.rth for rb in self.RBs if rb.is_allocated == 1 and rb.kth == kth]
-        a_uniform = a / len(indices)
-        for idx in indices:
-            self.RBs[idx].power = a_uniform
+            indices = [rb.rth for rb in self.RBs if rb.is_allocated == 1 and rb.kth == k]
+            a_uniform = a / len(indices)
+            for idx in indices:
+                self.RBs[idx].power = a_uniform
 
     def get_slice_reward(self, kth, nth):
         slice = self.BSs[kth].slices[nth]
