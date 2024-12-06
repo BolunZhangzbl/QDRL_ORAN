@@ -71,7 +71,7 @@ class RB:
     """
     Resource Block contains info
     """
-    def __init__(self, rth, kth=0, nth=0, mth=0, is_allocated=False, power=0):
+    def __init__(self, rth, kth=-1, nth=-1, mth=-1, is_allocated=False, power=0):
         self.rth = rth   # the idx of the RB
         self.kth = kth   # the idx of the BS that the RB is allocated
         self.nth = nth   # the idx of the slice that the RB is allocated
@@ -85,6 +85,12 @@ class RB:
         self.mth = mth
         self.is_allocated = is_allocated
         self.power = power
+
+    def reset(self):
+        self.kth = -1
+        self.nth = -1
+        self.mth = -1
+        self.is_allocated = False
 
 
 # Define O-RAN class
@@ -109,7 +115,6 @@ class ORAN:
 
         # Define hyper-parameters
         # self.dict_rbs = {i: {'k': 0, 'r': 0, 'm': 0} for i in range(num_rbs)}
-        self.dict_rbs = {i: 0 for i in range(num_rbs)}   # To help us quickly check if RB is being allocated
 
         # Define RBs
         self.RBs = [RB(rth=idx) for idx in range(num_rbs)]
@@ -228,15 +233,15 @@ class ORAN:
 
                     # 4. Update info in the self.RBs
                     # 4.1 Find the indices of available RBs
-                    indices_zero = list(itertools.islice((key for key, val in self.dict_rbs.items() if val == 0), 3))
+                    indices_zero = list(itertools.islice((rb.rth for rb in self.RBs if rb.is_allocated==False), 3))
                     # 4.2 Update self.RBs
                     for r in indices_zero:
                         self.RBs[r].kth = k
                         self.RBs[r].nth = n
                         self.RBs[r].mth = m
                         self.RBs[r].is_allocated = True
-                    # 4.3 Update the look up dict of RBs
-                        self.dict_rbs[r] = 1
+                    # 4.3 Add the indices of RBs to UE for easier release
+                        self.BSs[k].slices[n].UEs[m].rbs_indices.append(r)
 
     def set_power(self, a):
         assert self.tx_power_min <= a <= self.tx_power_max
@@ -255,7 +260,7 @@ class ORAN:
             if slice.slice_type.startswith('embb'):
                 reward = np.arctan(self.BSs[kth].slices[nth].traffic_total)
             else:
-                reward = 1 - np.sum([self.get_total_delay(kth, m) for m in range(3*nth-3, 3*nth)])
+                reward = 1 - np.sum([self.get_total_delay(kth, nth, m) for m in range(3)])
         else:
             reward = 0
 
@@ -271,6 +276,15 @@ class ORAN:
                 reward_weighted_sum += self.get_slice_reward(k, n)
 
         return reward_weighted_sum
+
+    def clear_ue_rbs(self):
+        for k in range(self.num_gnbs):
+            for n in range(4):
+                for m in range(3):
+                    ue = self.BSs[k].slices[n].UEs[m]
+                    if not ue.queue:
+                        for r in ue.rbs_indices:
+                            self.RBs[r].reset()
 
 
 
@@ -348,6 +362,7 @@ class UE:
         self.queue = []         # FIFO queue for packets
         self.packet_size = packet_size             # bytes
         self.num_rbs_allocated = num_rbs_allocated
+        self.rbs_indices = []
         self.max_queue_length = max_queue_length   # Maximum queue length (packets)
 
     def add_to_queue(self, traffic_size_bits, service_rate):
