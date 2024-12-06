@@ -179,7 +179,7 @@ class ORAN:
         # mth {0, 1, 2}         Idx of mobile devices
 
         tx_delay = self.get_tx_delay(kth, nth, mth)
-        queue_delay = self.BSs[kth].slices[nth].UEs[nth].delay
+        queue_delay = self.BSs[kth].slices[nth].UEs[mth].delay
         tx_re_delay = 4*TTI
         total_delay = tx_delay + queue_delay + tx_re_delay
 
