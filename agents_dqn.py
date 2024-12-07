@@ -9,6 +9,7 @@ from tensorflow.keras.models import Model
 
 # -- Private Imports
 from parameters import *
+from utils import *
 
 # -- Global Variables
 
@@ -21,10 +22,11 @@ We will design BaseAgent for other algos including DDPG, PPO
 
 # Base Agent for DQN
 class BaseAgentDQN:
-    def __init__(self, kth, state_space, action_space, buffer_capacity=int(1e4), batch_size=128):
-        self.kth = kth  # Index of BS
+    def __init__(self, state_space, action_space, action_mapper,
+                 buffer_capacity=int(1e4), batch_size=128):
         self.state_space = state_space
         self.action_space = action_space
+        self.action_mapper = action_mapper
 
         # Buffer
         self.buffer_capacity = buffer_capacity
@@ -49,12 +51,13 @@ class BaseAgentDQN:
         self.target_model = self.create_model()
         print(self.model.summary())
 
+
     def create_model(self):
         input_shape = (self.state_space,)
         X_input = Input(input_shape)
         X = Dense(64, activation="relu")(X_input)
         X = Dense(64, activation="relu")(X)
-        X = Dense(self.action_space, activation="sidmoid")(X)
+        X = Dense(self.action_space, activation="linear")(X)
         model = Model(inputs=X_input, outputs=X)
         return model
 
@@ -72,11 +75,13 @@ class BaseAgentDQN:
         self.epsilon *= self.epsilon_decay
         self.epsilon = max(self.epsilon_min, self.epsilon)
         if np.random.random() < self.epsilon:
-            return np.random.choice(self.action_space)
+            action_idx = np.random.choice(self.action_space)
         else:
             q_vals_dist = self.model.predict(state, verbose=0)[0]
-            action = tf.argmax(q_vals_dist).numpy()
-            return action
+            action_idx = tf.argmax(q_vals_dist).numpy()
+
+        action = self.action_mapper.idx_to_action(action_idx)
+        return action
 
     def sample(self):
         sample_indices = np.random.choice(min(self.buffer_counter, self.buffer_capacity), self.batch_size)
@@ -107,13 +112,25 @@ class BaseAgentDQN:
             a.assign(b * tau + (1 - tau))
 
 
-# class PowerContrlAgent(BaseAgentDQN):
-#     def __init__(self, kth, Lmax, buffer_capacity=int(1e4), batch_size=128):
-#         super().__init__(kth, state_space=3*2, action_space=1*2, buffer_capacity=buffer_capacity, batch_size=batch_size)
-#         self.Lmax = Lmax   # Upper bound for action
-#
-#
-# class ResourceAllocationAgent(BaseAgentDQN):
-#     def __init__(self, kth, Rmax, buffer_capacity=int(1e4), batch_size=128):
-#         super().__init__(kth, state_space=2*2, action_space=4*2, buffer_capacity=buffer_capacity, batch_size=batch_size)
-#         self.Rmax = Rmax   # Upper bound for action
+class PowerContrlAgent(BaseAgentDQN):
+    def __init__(self, Lmin, Lmax, buffer_capacity=int(1e4), batch_size=128):
+        state_space = 3
+        action_space = (Lmax - Lmin + 1)
+        action_mapper = ActionMapper(Lmin, Lmax)
+
+        super().__init__(state_space=state_space, action_space=action_space, action_mapper=action_mapper,
+                         buffer_capacity=buffer_capacity, batch_size=batch_size)
+        self.Lmax = Lmax   # Upper bound for action
+        self.Lmin = Lmin   # Lower bound for action
+
+
+class ResourceAllocationAgent(BaseAgentDQN):
+    def __init__(self, Rmin, Rmax, buffer_capacity=int(1e4), batch_size=128):
+        state_space = 2
+        action_space = (Rmax - Rmin + 1)
+        action_mapper = ActionMapper(Rmin, Rmax)
+
+        super().__init__(state_space=state_space, action_space=action_space, action_mapper=action_mapper,
+                         buffer_capacity=buffer_capacity, batch_size=batch_size)
+        self.Rmax = Rmax   # Upper bound for action
+        self.Rmin = Rmin   # Lower bound for action

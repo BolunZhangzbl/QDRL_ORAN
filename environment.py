@@ -17,49 +17,45 @@ class SlicingEnv(Env):
     def __init__(self):
         self.oran = ORAN()
 
-    def get_state_info(self, action_type):
-        assert action_type in ('power', 'resource')
+    def get_state_info(self, kth, nth):
 
-        Hn0 = np.sum([self.oran.BSs[0].slices[n].queue_total for n in range(4)])
-        Hn1 = np.sum([self.oran.BSs[1].slices[n].queue_total for n in range(4)])
+        Hn = self.oran.BSs[kth].slices[nth].queue_total
+        dm = np.sum([self.oran.get_total_delay(kth, nth, m) for m in range(3)])
+        Pk = self.oran.BSs[kth].bs_power
 
-        dm0 = np.sum([self.oran.get_total_delay(0, n, m) for n in range(4) for m in range(3)])
-        dm1 = np.sum([self.oran.get_total_delay(1, n, m) for n in range(4) for m in range(3)])
-
-        Pk0 = self.oran.BSs[0].bs_power
-        Pk1 = self.oran.BSs[1].bs_power
-
-        if action_type == 'power':
-            state_info = [[Hn0, dm0, Pk0], [Hn1, dm1, Pk1]]
-        else:
-            state_info = [[Hn0, dm0], [Hn1, dm1]]
+        state_info = [Hn, dm, Pk]
 
         return state_info
 
-    def step(self, action, action_type):
+    def step(self, actions):
+        action_power = actions[0]
+        action_resource = actions[1]
 
         # 1. Perform the action at ORAN
-        if action_type == 'power':
-            self.oran.set_power(action)
-        else:
-            self.oran.set_rbs(action)
+        # action.shape == (2,1)
+        self.oran.set_power(action_power)
+
+        # action.shape == (2,4)
+        self.oran.set_rbs(action_resource)
 
         # 2. Calculate the reward
-        self.reward = self.oran.get_total_reward()
-        if action_type == 'power':
-            self.reward -= alpha * action
+        reward_resource = self.oran.get_total_reward()
+        reward_power = reward_resource - alpha * action_power[0] - alpha * action_power[1]
+        self.rewards = [reward_power, reward_resource]
 
-        if self.reward >= dict_reward_done.get(action_type):
+        if reward_power >= dict_reward_done.get('power') and reward_resource >= dict_reward_done.get('resource'):
             self.done = True
 
         # 3. Get the current state info after performing action
-        self.next_state = self.get_state_info(action_type)
+        # self.next_state.shape == (2,4,3)
+        self.next_state = np.array([[self.get_state_info(k, n) for n in range(4)] for k in range(2)])
 
-        return self.next_state, self.reward, self.done
+        return self.next_state, self.rewards, self.done
 
-    def reset(self, action_type):
-        self.state = self.get_state_info(action_type)
-        self.reward = 0
+    def reset(self):
+        # self.state.shape == (2,4,3)
+        self.state = np.array([[self.get_state_info(k, n) for n in range(4)] for k in range(2)])
+        self.rewards = [0, 0]
         self.done = False
 
         return self.state
@@ -102,7 +98,6 @@ class ORAN:
         # Define BS
         self.num_gnbs = num_gnbs  # Number of BSs
         self.BSs = [BS(0, 0) for _ in range(2)]
-        self.num_rbs_remaining = num_rbs  # 100 rbs
 
         # Define hyper-parameters
         self.tx_power_max = P_max
@@ -111,9 +106,6 @@ class ORAN:
         self.BSs[1].bs_power = np.random.uniform(self.tx_power_min, self.tx_power_max)
         self.Br = bandwidth_per_rb  # Bandwidth per RB (Hz)
         self.N0 = N0  # Noise Power Density (dBm/Hz)
-
-        # Define hyper-parameters
-        # self.dict_rbs = {i: {'k': 0, 'r': 0, 'm': 0} for i in range(num_rbs)}
 
         # Define RBs
         self.RBs = [RB(rth=idx) for idx in range(num_rbs)]
@@ -138,8 +130,7 @@ class ORAN:
         assert kth in (0, 1)
         assert rth in range(100)
 
-        kth_ = 1 - kth   # the idx of the other BS
-        if self.RBs[rth].kth==kth and self.RBs[rth].is_allocated==1:
+        if self.RBs[rth].kth == kth and self.RBs[rth].is_allocated == 1:
             gkm_num = self.get_channel_gain()
             numerator = self.RBs[rth].is_allocated * gkm_num * self.RBs[rth].power
         else:
@@ -147,7 +138,7 @@ class ORAN:
 
         denominator = 0
         for rth_ in range(num_rbs):
-            if self.RBs[rth_].kth==kth_ and self.RBs[rth_].is_allocated==1:
+            if self.RBs[rth_].kth != kth and self.RBs[rth_].is_allocated == 1:
                 gkm_den = self.get_channel_gain()
                 denominator += 1 * gkm_den * self.RBs[rth].power + self.Br*self.N0
 
@@ -243,12 +234,14 @@ class ORAN:
                         self.BSs[k].slices[n].UEs[m].rbs_indices.append(r)
 
     def set_power(self, a):
-        assert self.tx_power_min <= a <= self.tx_power_max
+        # a.shape == (2, 1)
 
         for k in range(self.num_gnbs):
             self.BSs[k].bs_power = a[k]
 
             indices = [rb.rth for rb in self.RBs if rb.is_allocated == 1 and rb.kth == k]
+
+            # Ensure the Tx Power is uniformly distributed across all the RBs
             a_uniform = a / len(indices)
             for idx in indices:
                 self.RBs[idx].power = a_uniform
