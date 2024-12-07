@@ -12,7 +12,6 @@ from parameters import *
 
 # -- Functions
 
-
 class SlicingEnv(Env):
 
     def __init__(self):
@@ -102,7 +101,7 @@ class ORAN:
 
         # Define BS
         self.num_gnbs = num_gnbs  # Number of BSs
-        self.BSs = [BS(self, 0, 0) for _ in range(2)]
+        self.BSs = [BS(0, 0) for _ in range(2)]
         self.num_rbs_remaining = num_rbs  # 100 rbs
 
         # Define hyper-parameters
@@ -287,16 +286,14 @@ class ORAN:
                             self.RBs[r].reset()
 
 
-
 # Define Base Station
 class BS:
     """
     Base Station Class which contains two eMBB slices and two URLLC slices
     """
-    def __init__(self, oran_instance, bs_power=0, num_rbs_allocated=0):
-        self.oran_instance = oran_instance
+    def __init__(self, bs_power=0, num_rbs_allocated=0):
 
-        self.slices = [Slice(self, key) for key in dict_slice_weights.keys()]
+        self.slices = [Slice(key) for key in dict_slice_weights.keys()]
         self.bs_power = bs_power
         self.num_rbs_allocated = num_rbs_allocated
 
@@ -306,8 +303,7 @@ class Slice:
     """
     General Class for Network Slice: eMBB or URLLC
     """
-    def __init__(self, bs_instance, slice_type, num_ues=3, num_rbs_allocated=0):
-        self.bs_instance = bs_instance
+    def __init__(self, slice_type, num_ues=3, num_rbs_allocated=0):
 
         assert slice_type in dict_slice_weights.keys()
         self.slice_type = slice_type
@@ -326,7 +322,7 @@ class Slice:
         self.poisson_lambda = dict_poisson_lambda.get(slice_type)
 
         # UEs
-        self.UEs = [UE(self, self.packet_size) for _ in range(self.num_ues)]
+        self.UEs = [UE(self.packet_size) for _ in range(self.num_ues)]
 
     def update_traffic(self):
         """
@@ -351,8 +347,7 @@ class UE:
     """
     User Equipment Class
     """
-    def __init__(self, slice_instance, packet_size, num_rbs_allocated=0, max_queue_length=10):
-        self.slice_instance = slice_instance
+    def __init__(self, packet_size, num_rbs_allocated=0, max_queue_length=10):
 
         assert packet_size in (16, 32)
 
