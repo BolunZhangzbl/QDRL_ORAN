@@ -23,7 +23,7 @@ from agents_ppo import *
 Main Function to train the RL
 """
 
-def main():
+def train():
     try:
         env = SlicingEnv()
         agent = BaseAgentDQN(kth=0, state_space=6, action_space=2)
