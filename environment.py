@@ -69,9 +69,11 @@ class SlicingEnv(Env):
         return self.state
 
     def render(self):
-        for k in range(2):
-            for n in range(4):
-                self.oran.BSs[k].slices[n].update_traffic()
+        # 1. Update UE traffic
+        self.oran.update_ue_traffic()
+
+        # 2. Update unused RBs info if queue is emptied
+        self.oran.update_ue_rbs()
         # print(f"\nCompleted updating traffic for each slice!!!\n")
 
 
@@ -88,6 +90,15 @@ class RB:
         self.mth = mth   # the idx of the UE that the RB is allocated
         self.is_allocated = is_allocated
         self.power = power
+
+    def __str__(self):
+        """
+        Returns a string representation of the RB object.
+        """
+        return (
+            f"RB(rth={self.rth}, kth={self.kth}, nth={self.nth}, mth={self.mth}, "
+            f"is_allocated={self.is_allocated}, power={self.power:.2f})"
+        )
 
     def update_params(self, kth, nth, mth, is_allocated, power):
         self.kth = kth
@@ -238,7 +249,7 @@ class ORAN:
             sum_rbs = sum(rbs_dist[k])
             self.BSs[k].num_rbs_allocated = sum_rbs
 
-            for n in range(len(rbs_dist)):
+            for n in range(4):
                 # 2. Allocate the RBs to the slice
                 self.BSs[k].slices[n].num_rbs_allocated = rbs_dist[k][n]
 
@@ -300,16 +311,24 @@ class ORAN:
 
         return rewards_matrix
 
-    def clear_ue_rbs(self):
+    def update_ue_traffic(self):
+        for k in range(self.num_gnbs):
+            for n in range(4):
+                self.BSs[k].slices[n].update_traffic()
+
+    def update_ue_rbs(self):
         for k in range(self.num_gnbs):
             for n in range(4):
                 for m in range(3):
                     ue = self.BSs[k].slices[n].UEs[m]
+                    # Check if there is any awaiting packets in the queue
+                    # We update the UE info, and the RBs info if the queue is emptied
                     if not ue.queue:
-                        ue.num_rbs_allocated = 0
+                        # 1. Update RBs info
                         for r in ue.rbs_indices:
                             self.RBs[r].reset()
-
+                        # 2. Update UE info
+                        ue.reset()
 
 # Define Base Station
 class BS:
@@ -389,6 +408,14 @@ class UE:
         # Store the last 10 traffic (last 10 seconds)
         self.service_rate_history = [0]
 
+    def __str__(self):
+        """
+        Returns a string representation of the RB object.
+        """
+        return (
+            f"UE(traffic_curr={self.traffic_curr}, delay={self.delay}, allocated_rbs={self.num_rbs_allocated}"
+        )
+
     def add_to_queue(self, traffic_size_bits):
         # Convert traffic size in bits to number of packets
         traffic_size_packets = traffic_size_bits / (self.packet_size * bits_per_byte)
@@ -437,7 +464,7 @@ class UE:
 
     def reset(self):
         """Reset the UE state"""
-        self.traffic_curr = 0
-        self.traffic_avg = 0
         self.delay = 0
         self.queue = []
+        self.num_rbs_allocated = 0
+        self.rbs_indices = []
