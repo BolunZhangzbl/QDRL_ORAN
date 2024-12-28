@@ -82,20 +82,20 @@ def train(train_mode='irl'):
                     # print(f"loss_resource: {loss_resource}")
 
             loss_by_iter_list.append(loss)
-            print(f"inner_iter/episode: {step}/{ep} - Loss: {loss:.6e}")
+            print(f"step/episode: {step}/{ep} - Loss: {loss:.6e}")
             if step%100 == 0:
+                # Display RBs info
                 print(f"{'rth':<5}{'kth':<5}{'nth':<5}{'mth':<5}{'is_allocated':<15}{'power':<10}")
                 print("-" * 45)
                 for rb in env.oran.RBs:
                     print(f"{rb.rth:<5}{rb.kth:<5}{rb.nth:<5}{rb.mth:<5}{str(rb.is_allocated):<15}{rb.power:<10.2f}")
 
-                print(
-                    f"{'traffic_curr':<15}{'delay':<10}{'packet_size':<15}{'allocated_rbs':<15}")
+                # Display UEs info
+                print(f"{'traffic_curr':<15}{'delay':<10}{'packet_size':<15}{'allocated_rbs':<15}")
                 print("-" * 75)
                 UEs = [env.oran.BSs[k].slices[n].UEs[m] for m in range(3) for n in range(4) for k in range(2)]
                 for ue in UEs:
-                    print(
-                        f"{ue.traffic_curr:<15}{ue.delay:<10}{ue.packet_size:<15}{ue.num_rbs_allocated:<15}")
+                    print(f"{ue.traffic_curr:<15}{ue.delay:<10}{ue.packet_size:<15}{ue.num_rbs_allocated:<15}")
 
             # 4. We perform global training:
 
