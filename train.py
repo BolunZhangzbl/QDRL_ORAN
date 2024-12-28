@@ -1,20 +1,11 @@
 # -- Public Imports
-import os
-import random
-import numpy as np
-import tensorflow as tf
-from tensorflow.keras.layers import Input, Dense, GaussianNoise, Lambda, Dropout, Concatenate, \
-    Reshape, Add, Embedding, Flatten, Conv1D, BatchNormalization, Embedding, LSTM, Activation
-from tensorflow.keras.models import Model
 
 # -- Private Imports
-from parameters import *
-from utils import *
 
 from environment import *
 from agents_dqn import *
-from agents_ddpg import *
-from agents_ppo import *
+# from agents_ddpg import *
+# from agents_ppo import *
 
 # -- Global Variables
 
@@ -24,11 +15,14 @@ from agents_ppo import *
 """
 Main Function to train the RL
 """
+
 def local_train(agent):
     pass
 
 
-def global_train():
+def train(train_mode='irl'):
+    assert train_mode in ('irl', 'frl', 'crl')
+
     env = SlicingEnv()
     agent_power = PowerContrlAgent(Lmin=1, Lmax=4)
     agent_resource = ResourceAllocationAgent(Rmin=0, Rmax=7)
@@ -37,55 +31,77 @@ def global_train():
     avg_reward_list = []
     loss_by_iter_list = []
 
-    try:
+    if train_mode == 'frl':
+        agent_global = GlobalAgentDQN(action_space_power=4, action_space_resource=8)
 
-        for ep in range(num_episodes):
+    # try:
 
-            episodic_reward = 0
+    for ep in range(num_episodes):
 
-            prev_state = env.reset()
-            for step in range(max_step):
-                # tf_prev_state = tf.convert_to_tensor(prev_state)
+        episodic_reward = 0
 
-                action_power = np.array([[agent_power.act(prev_state[k][n][:2]) for n in range(4)] for k in range(2)])
-                action_resource = np.array([[agent_power.act(prev_state[k][n]) for n in range(4)] for k in range(2)])
-                actions = [action_power, action_resource]
+        prev_state = env.reset()
+        for step in range(max_step):
+            # 0. Render the environments (traffic_update)
+            env.render()
 
+            # tf_prev_state = tf.convert_to_tensor(prev_state)
 
-                state, rewards, done = env.step(actions)
-                episodic_reward += sum(rewards)
-                ep_mean_reward_list.append(sum(rewards))
+            # 1. We perform the action based on the current state
+            prev_state_power = np.sum(prev_state, axis=1)
+            action_power = np.array([[agent_power.act(prev_state_power[k])] for k in range(2)])
+            action_resource = np.array([[agent_resource.act(prev_state[k][n][:2]) for n in range(4)] for k in range(2)])
+            actions_all = (action_power, action_resource)
 
-                agent_power.record((prev_state, action_power, rewards[0], state[:, :, :2]))
-                agent_resource.record((prev_state, action_resource, rewards[1], state))
+            # 2. We send the collections of all the actions for both BSs to the environments
+            state, rewards, done = env.step(actions_all)
+            rewards_power_matrix, rewards_resource_matrix = rewards[0], rewards[1]
+            rewards_total = np.sum(rewards_power_matrix) + np.sum(rewards_resource_matrix)
+            episodic_reward += rewards_total
+            ep_mean_reward_list.append(rewards_total)
+
+            # 3. We perform local training:
+            loss = 0
+            for k in range(2):
+                agent_power.record((prev_state_power[k], action_power[k], rewards_power_matrix[k][0], np.sum(state[k], axis=0)))
 
                 # Train the behaviour and target networks
-                agent_power.update()
-                loss_power = agent_power.update_target()
+                loss_power, q_vals_power = agent_power.update()
+                agent_power.update_target()
 
-                agent_resource.update()
-                loss_resource = agent_resource.update_target()
+                loss += loss_power
+                # print(f"loss_power: {loss_power}")
 
-                loss = loss_power + loss_resource
+                for n in range(4):
+                    agent_resource.record((prev_state[k][n][:2], action_resource[k][n], rewards_resource_matrix[k][n], state[k][n][:2]))
 
-                loss_by_iter_list.append(loss)
-                print(f"inner_iter/episode: {step}/{ep} - "
-                      f"Loss: {loss:.6f}")
+                    loss_resource, q_vals_resource = agent_resource.update()
+                    agent_resource.update_target()
 
-                if done:
-                    print("Done!   inner_iter/episode:{}/{},   Acc. Mean. Reward: {}\n".format(step, ep, np.mean(ep_mean_reward_list)))
-                    break
+                    loss += loss_resource
+                    # print(f"loss_resource: {loss_resource}")
 
-                prev_state = state
+            loss_by_iter_list.append(loss)
+            print(f"inner_iter/episode: {step}/{ep} - Loss: {loss:.6e}")
 
-            ep_reward_list.append(episodic_reward)
-            avg_reward = np.mean(ep_mean_reward_list[-last_n:])
-            avg_reward_list.append(avg_reward)
+            # 4. We perform global training:
 
-            if (np.mean(loss_by_iter_list[-3000:]) <= 1.5e-3):
+            if done:
+                print("Done!   inner_iter/episode:{}/{},   Acc. Mean. Reward: {}\n".format(step, ep, np.mean(ep_mean_reward_list)))
                 break
 
-    finally:
-        file_path = f"save_dqn/rl/save_lists"
-        save_lists(file_path, ep_reward_list, ep_mean_reward_list, avg_reward_list, loss_by_iter_list)
+            prev_state = state
 
+        ep_reward_list.append(episodic_reward)
+        avg_reward = np.mean(ep_mean_reward_list[-last_n:])
+        avg_reward_list.append(avg_reward)
+
+        if (np.mean(loss_by_iter_list[-3000:]) <= 1.5e-3):
+            break
+
+    # finally:
+    #     file_path = f"save_dqn/rl/save_lists"
+    #     save_lists(file_path, ep_reward_list, ep_mean_reward_list, avg_reward_list, loss_by_iter_list)
+
+
+train(train_mode='irl')

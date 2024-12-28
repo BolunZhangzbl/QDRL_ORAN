@@ -3,6 +3,7 @@
 bandwidth = 20 * int(1e6)  # 20 MHz
 num_rbs = 100
 bandwidth_per_rb = bandwidth / num_rbs
+# bandwidth_per_rb = int(1.8e4)   # 180 kHz per RB
 num_subcarriers_per_rb = 12
 P_max = 30   # 30 dBm for maximum transmission power
 tx_rx_ant_gain = 15   # 15 dB for Tx/Rx antenna gain
@@ -15,7 +16,12 @@ num_ues = 24   # 12 for each service (URLLC, eMBB)
 d_inter_gnb = 500
 
 TTI = (1 / 15000) * 2   # Transmission Time Interval (s), subcarrier spacing = 15kHz
-N0 = -174   # Noise Power Density (dBm/Hz), Power of AWGN, sigma^2
+symbol_rate_per_subcarrier = 15000   # For LTE, each subcarrier can carry 15,000 symbols per sec
+bits_per_symbol = 4   # 16-QAM
+coding_rate = 0.5     # 50% redundancy
+data_rate_per_rb = num_subcarriers_per_rb * 2 * bits_per_symbol * coding_rate * (1/TTI)
+
+N0 = 4.0*1e-21   # Noise Power Density (W/Hz), Power of AWGN, sigma^2
 
 bits_per_byte = 8
 
@@ -34,10 +40,10 @@ dict_packet_size = dict(
 )
 
 dict_poisson_lambda = dict(
-    urllc2=560,
-    urllc1=560,
-    embb2=1120,
-    embb1=1120,
+    urllc2=2850,
+    urllc1=2850,
+    embb2=5700,
+    embb1=5700,
 )
 
 dict_reward_done = dict(

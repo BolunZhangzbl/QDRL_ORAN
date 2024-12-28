@@ -12,6 +12,8 @@ import numpy as np
 class ActionMapper:
     def __init__(self, minVal, maxVal):
         # Total number of discrete actions
+        self.minVal = minVal
+        self.maxVal = maxVal
         self.num_actions = (maxVal - minVal + 1)
         self.actions = list(range(minVal, maxVal+1))
 
@@ -22,7 +24,7 @@ class ActionMapper:
         if idx < 0 or idx >= self.num_actions:
             raise ValueError(f"Index {idx} out of valid range [0, {self.num_actions - 1}]")
 
-        return self.actions[idx]
+        return int(self.actions[idx])
 
 
 def save_lists(file_path, ep_reward_list, ep_mean_reward_list, avg_reward_list, loss_by_iter_list):

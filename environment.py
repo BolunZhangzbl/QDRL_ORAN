@@ -18,11 +18,16 @@ class SlicingEnv(Env):
         self.oran = ORAN()
 
     def get_state_info(self, kth, nth):
+        # Ensure Hn is a scalar
+        Hn = float(self.oran.BSs[kth].slices[nth].queue_total)  # Convert to float if not already scalar
 
-        Hn = self.oran.BSs[kth].slices[nth].queue_total
-        dm = np.sum([self.oran.get_total_delay(kth, nth, m) for m in range(3)])
-        Pk = self.oran.BSs[kth].bs_power
+        # Ensure dm is a scalar (sum should already yield a single value)
+        dm = float(np.sum([self.oran.get_total_delay(kth, nth, m) for m in range(3)]))
 
+        # Ensure Pk is a scalar
+        Pk = float(self.oran.BSs[kth].bs_power)  # Convert to float if necessary
+
+        # Return as a list of 3 scalar values
         state_info = [Hn, dm, Pk]
 
         return state_info
@@ -39,11 +44,14 @@ class SlicingEnv(Env):
         self.oran.set_rbs(action_resource)
 
         # 2. Calculate the reward
-        reward_resource = self.oran.get_total_reward()
-        reward_power = reward_resource - alpha * action_power[0] - alpha * action_power[1]
-        self.rewards = [reward_power, reward_resource]
+        rewards_resource_matrix = self.oran.get_total_reward()   # (2,4)
+        rewards_power_matrix = np.mean(rewards_resource_matrix, axis=1) - alpha * np.array(action_power)   # (2,1)
 
-        if reward_power >= dict_reward_done.get('power') and reward_resource >= dict_reward_done.get('resource'):
+        self.rewards = (rewards_power_matrix, rewards_resource_matrix)
+
+        if np.mean(rewards_power_matrix) >= dict_reward_done.get('power') and \
+                np.mean(rewards_resource_matrix) >= dict_reward_done.get('resource'):
+
             self.done = True
 
         # 3. Get the current state info after performing action
@@ -59,6 +67,13 @@ class SlicingEnv(Env):
         self.done = False
 
         return self.state
+
+    def render(self):
+        for k in range(2):
+            for n in range(4):
+                self.oran.BSs[k].slices[n].update_traffic()
+        # print(f"\nCompleted updating traffic for each slice!!!\n")
+
 
 
 # Define Resource Block class
@@ -122,34 +137,44 @@ class ORAN:
         s = np.random.normal(0, 8)   # 0 mean, 8 dB std
 
         # channel gain
-        gkm = tx_rx_ant_gain*2 - (pl + s)
+        gkm = tx_rx_ant_gain * 2 - (pl + s)
 
         return gkm
 
-    def get_sinr(self, kth, rth):
-        assert kth in (0, 1)
-        assert rth in range(100)
+    def get_sinr(self, kth, rth, mth):
+        assert kth in (0, 1), "kth must be either 0 or 1."
+        assert rth in range(100), "rth must be within the valid range of resource blocks."
 
-        if self.RBs[rth].kth == kth and self.RBs[rth].is_allocated == 1:
+        # Check if the resource block (rth) is allocated to user kth and matches mth
+        rb = self.RBs[rth]
+        if rb.kth == kth and rb.is_allocated == 1 and rb.mth == mth:
+            # Calculate the numerator for SINR
             gkm_num = self.get_channel_gain()
-            numerator = self.RBs[rth].is_allocated * gkm_num * self.RBs[rth].power
+            numerator = gkm_num * rb.power
         else:
             return 0
 
+        # Calculate the denominator for SINR
         denominator = 0
-        for rth_ in range(num_rbs):
-            if self.RBs[rth_].kth != kth and self.RBs[rth_].is_allocated == 1:
+        for other_rb in self.RBs:
+            if other_rb.kth != kth and other_rb.is_allocated == 1:
                 gkm_den = self.get_channel_gain()
-                denominator += 1 * gkm_den * self.RBs[rth].power + self.Br*self.N0
+                interference = gkm_den * other_rb.power
+                noise = self.Br * self.N0
+                denominator += interference + noise
 
+        # Avoid division by zero
+        if denominator == 0:
+            return 0
+
+        # Calculate SINR
         sinr = numerator / denominator
-
         return sinr
 
-    def get_link_capacity(self, kth):
+    def get_link_capacity(self, kth, mth):
         Ckm = 0
         for rth in range(num_rbs):
-            Ckm += self.Br * np.log2(1 + self.get_sinr(kth, rth))
+            Ckm += self.Br * np.log2(1 + self.get_sinr(kth, rth, mth))
 
         return Ckm
 
@@ -157,10 +182,10 @@ class ORAN:
         # nth {0, 1, 2, 3}      Idx of Slice
         # mth {0, 1, 2}         Idx of mobile devices
 
-        Ckm = self.get_link_capacity(kth)
-        Lm = self.BSs[kth].slices[nth].UEs[mth].traffic_curr
+        Ckm = self.get_link_capacity(kth, mth)
+        Lm = self.BSs[kth].slices[nth].UEs[mth].get_queue_length()
 
-        tx_delay = Lm / Ckm
+        tx_delay = Lm / Ckm if Ckm!=0 else Lm/0.001
 
         return tx_delay
 
@@ -181,16 +206,17 @@ class ORAN:
         """
         # nth {0, 1, 2, 3}      Idx of Slice
         # mth {0, 1, 2}         Idx of mobile devices
-        assert isinstance(sum_rbs, int)
+        assert isinstance(sum_rbs, (int, np.integer))
 
-        Ckm = self.get_link_capacity(kth)
+        Ckms = [self.get_link_capacity(kth, m) for m in range(3)]
         UEs = self.BSs[kth].slices[nth].UEs
 
-        tx_rates = [(ue.traffic_curr - ue.traffic_past) for ue in UEs]
-        tx_rates = [elem if elem!=0 else float('inf') for elem in tx_rates]
-        ppf_dist = [Ckm/tx_rate for tx_rate in tx_rates]
-        ppf_dist_total = sum(ppf_dist)
+        tx_rates = [ue.service_rate_avg for ue in UEs]
+        ppf_dist = [Ckms[idx]/tx_rates[idx] if tx_rates[idx]!=0 else 0 for idx in range(3)]
 
+        if np.sum(ppf_dist) == 0:
+            ppf_dist = np.random.randint(100, size=3)
+        ppf_dist_total = sum(ppf_dist)
         rbs_dist_intra = [round(sum_rbs * dist / ppf_dist_total) for dist in ppf_dist]
 
         # Adjust if there is a rounding issue (e.g., the sum of result isn't equal to integer)
@@ -220,6 +246,7 @@ class ORAN:
                 rbs_dist_intra = self.intra_slice_allocate_ppf(k, n, rbs_dist[k][n])
                 for m in range(len(rbs_dist_intra)):
                     self.BSs[k].slices[n].UEs[m].num_rbs_allocated = rbs_dist_intra[m]
+                    self.BSs[k].slices[n].UEs[m].update_service_rate()
 
                     # 4. Update info in the self.RBs
                     # 4.1 Find the indices of available RBs
@@ -237,12 +264,12 @@ class ORAN:
         # a.shape == (2, 1)
 
         for k in range(self.num_gnbs):
-            self.BSs[k].bs_power = a[k]
+            self.BSs[k].bs_power = a[k][0]
 
             indices = [rb.rth for rb in self.RBs if rb.is_allocated == 1 and rb.kth == k]
 
             # Ensure the Tx Power is uniformly distributed across all the RBs
-            a_uniform = a / len(indices)
+            a_uniform = self.BSs[k].bs_power / len(indices)
             for idx in indices:
                 self.RBs[idx].power = a_uniform
 
@@ -259,15 +286,19 @@ class ORAN:
         # Multiply by its weight
         reward *= slice.slice_weight
 
-        return reward
+        return 0 if reward==float('-inf') else reward
 
     def get_total_reward(self):
-        reward_weighted_sum = 0
-        for k in range(num_gnbs):
-            for n in range(4):
-                reward_weighted_sum += self.get_slice_reward(k, n)
+        # reward_weighted_sum = 0
+        # for k in range(2):
+        #     for n in range(4):
+        #         reward_weighted_sum += self.get_slice_reward(k, n)
+        #
+        # return reward_weighted_sum
 
-        return reward_weighted_sum
+        rewards_matrix = np.array([[self.get_slice_reward(k, n) for n in range(4)] for k in range(2)])
+
+        return rewards_matrix
 
     def clear_ue_rbs(self):
         for k in range(self.num_gnbs):
@@ -275,6 +306,7 @@ class ORAN:
                 for m in range(3):
                     ue = self.BSs[k].slices[n].UEs[m]
                     if not ue.queue:
+                        ue.num_rbs_allocated = 0
                         for r in ue.rbs_indices:
                             self.RBs[r].reset()
 
@@ -307,10 +339,9 @@ class Slice:
 
         # Traffic Flow
         self.packet_size = dict_packet_size.get(slice_type)  # Bytes
-        self.traffic_rate = 1000  # Constant traffic rate (bps) for each UE
         self.traffic_total = 0  # bps
         self.queue_total = 0  # bits
-        self.service_rate = 2000  # Service rate per UE (bps)
+        # self.service_rate = 2000  # Service rate per UE (bps)
 
         self.poisson_lambda = dict_poisson_lambda.get(slice_type)
 
@@ -328,12 +359,12 @@ class Slice:
             packets_per_sec = np.random.poisson(self.poisson_lambda)
 
             traffic_size_bits = packets_per_sec * self.packet_size * bits_per_byte
-            ue.add_to_queue(traffic_size_bits, self.service_rate)
+            ue.add_to_queue(traffic_size_bits)
 
         self.traffic_total = np.sum([ue.traffic_curr for ue in self.UEs])
         self.queue_total = np.sum([ue.get_queue_length() for ue in self.UEs])
 
-        return self.traffic_total, self.queue_total
+        # return self.traffic_total, self.queue_total
 
 
 class UE:
@@ -344,8 +375,10 @@ class UE:
 
         assert packet_size in (16, 32)
 
-        self.traffic_curr = 0   # Current traffic in bps
-        self.traffic_past = 0   # Traffic in the previous cycle (for delay calculation)
+        self.traffic_curr = 0       # Current traffic in bps
+        self.service_rate = 0       # Current service rate depending on the num_rbs_allocated
+        self.service_rate_avg = 0   # Averaged service rate for the last 10 sec
+
         self.delay = 0          # Total delay for the current packet (sec)
         self.queue = []         # FIFO queue for packets
         self.packet_size = packet_size             # bytes
@@ -353,7 +386,10 @@ class UE:
         self.rbs_indices = []
         self.max_queue_length = max_queue_length   # Maximum queue length (packets)
 
-    def add_to_queue(self, traffic_size_bits, service_rate):
+        # Store the last 10 traffic (last 10 seconds)
+        self.service_rate_history = [0]
+
+    def add_to_queue(self, traffic_size_bits):
         # Convert traffic size in bits to number of packets
         traffic_size_packets = traffic_size_bits / (self.packet_size * bits_per_byte)
 
@@ -363,15 +399,14 @@ class UE:
                 self.queue.append(1)  # Add a packet to the queue
 
         # Calculate the number of packets that can be served in this cycle
-        packets_served = int(service_rate / (self.packet_size * bits_per_byte))
+        packets_served = int(self.service_rate / (self.packet_size * bits_per_byte))
         self.queue = self.queue[packets_served:]  # Serve packets, removing from the queue
 
         # Update current traffic (the size of the remaining packets in the queue)
-        self.traffic_past = self.traffic_curr
         self.traffic_curr = len(self.queue) * (self.packet_size * bits_per_byte)  # Remaining traffic in queue
 
         # Calculate the queue delay based on the number of packets in the queue
-        self.delay = self.calculate_queue_delay(service_rate)
+        self.delay = self.calculate_queue_delay(self.service_rate)
 
     def calculate_queue_delay(self, service_rate):
         """
@@ -380,8 +415,17 @@ class UE:
         where service_rate is in bits per second, and the queue length is in bits.
         """
         queue_length_bits = len(self.queue) * self.packet_size * bits_per_byte
-        queue_delay = queue_length_bits / service_rate  # Time to serve the current queue in seconds
+        # Time to serve the current queue in seconds
+        queue_delay = queue_length_bits / service_rate if service_rate!=0 else queue_length_bits
         return queue_delay
+
+    def update_service_rate(self):
+        self.service_rate = self.num_rbs_allocated * data_rate_per_rb   # n * 360 kbps
+        self.service_rate_history.append(self.service_rate)
+        if len(self.service_rate_history) > 10:
+            self.service_rate_history.pop(0)
+
+        self.service_rate_avg = sum(self.service_rate_history) / len(self.service_rate_history)
 
     def get_queue_packets(self):
         """Return the total number of queue packets"""
@@ -394,6 +438,6 @@ class UE:
     def reset(self):
         """Reset the UE state"""
         self.traffic_curr = 0
-        self.traffic_past = 0
+        self.traffic_avg = 0
         self.delay = 0
         self.queue = []
