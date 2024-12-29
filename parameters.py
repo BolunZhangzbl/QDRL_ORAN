@@ -39,13 +39,6 @@ dict_packet_size = dict(
     embb1=32,
 )
 
-# dict_poisson_lambda = dict(
-#     urllc2=2850,
-#     urllc1=2850,
-#     embb2=5700,
-#     embb1=5700,
-# )
-
 dict_poisson_lambda = dict(
     urllc2=3000,
     urllc1=3000,

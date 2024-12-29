@@ -70,7 +70,6 @@ def train(train_mode='irl'):
                 agent_power.update_target()
 
                 loss += loss_power
-                # print(f"loss_power: {loss_power}")
 
                 for n in range(4):
                     agent_resource.record((prev_state[k][n][:2], action_resource[k][n], rewards_resource_matrix[k][n], state[k][n][:2]))
@@ -79,7 +78,6 @@ def train(train_mode='irl'):
                     agent_resource.update_target()
 
                     loss += loss_resource
-                    # print(f"loss_resource: {loss_resource}")
 
             loss_by_iter_list.append(loss)
             print(f"step/episode: {step}/{ep} - Loss: {loss:.6e}")
@@ -100,11 +98,11 @@ def train(train_mode='irl'):
             # 4. We perform global training:
 
             if done:
-                print("Done!   inner_iter/episode:{}/{},   Acc. Mean. Reward: {}\n".format(step, ep, np.mean(ep_mean_reward_list)))
                 break
 
             prev_state = state
 
+        print("Done!   step/episode:{}/{},   Acc. Mean. Reward: {}\n".format(step, ep, np.mean(ep_mean_reward_list)))
         ep_reward_list.append(episodic_reward)
         avg_reward = np.mean(ep_mean_reward_list[-last_n:])
         avg_reward_list.append(avg_reward)

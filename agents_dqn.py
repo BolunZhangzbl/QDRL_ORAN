@@ -171,7 +171,7 @@ class BaseAgentDQN:
 
 
 class PowerContrlAgent(BaseAgentDQN):
-    def __init__(self, Lmin, Lmax, buffer_capacity=int(1e4), batch_size=128):
+    def __init__(self, Lmin, Lmax, buffer_capacity=int(1e5), batch_size=128):
         state_space = 3   # [Hn, sum dn, Pk]
         action_space = (Lmax - Lmin + 1)
         action_mapper = ActionMapper(Lmin, Lmax)
@@ -183,7 +183,7 @@ class PowerContrlAgent(BaseAgentDQN):
 
 
 class ResourceAllocationAgent(BaseAgentDQN):
-    def __init__(self, Rmin, Rmax, buffer_capacity=int(1e4), batch_size=128):
+    def __init__(self, Rmin, Rmax, buffer_capacity=int(1e5), batch_size=128):
         state_space = 2   # [Hn, sum dn]
         action_space = (Rmax - Rmin + 1)
         action_mapper = ActionMapper(Rmin, Rmax)
