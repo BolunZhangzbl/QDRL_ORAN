@@ -16,23 +16,54 @@ from agents_dqn import *
 Main Function to train the RL
 """
 
-def local_train(agent):
-    pass
+def local_train(env, agent, kth, nth):
+
+    reward_local = 0
+    loss_local = 0
+    prev_state = np.array(env.reset(kth, nth))
+
+    env.render()
+    for _ in range(num_rounds_local):
+
+        action = agent.act(prev_state)
+        state, reward, done = env.step(action, kth, nth)
+        state = np.array(state)
+        reward_local += reward
+
+        agent.record((prev_state, action, reward, state))
+        loss, q_vals = agent.update()
+        agent.update_target()
+        loss_local += loss
+
+        prev_state = state
+
+    # print(f"Complete local training for client-({kth},{nth})")
+
+    return reward_local, loss_local
+
+
+def fed_avg(global_model, local_models):
+    avg_weight = []
+    local_weights = [local_model.get_weights() for local_model in local_models]
+    for weight_list_tuple in zip(*local_weights):
+        avg_weight.append(np.mean(np.array(weight_list_tuple), axis=0))
+
+    global_model.set_weights(avg_weight)
 
 
 def train(train_mode='irl'):
     assert train_mode in ('irl', 'frl', 'crl')
 
     env = SlicingEnv()
-    agent_power = PowerContrlAgent(Lmin=1, Lmax=4)
-    agent_resource = ResourceAllocationAgent(Rmin=0, Rmax=7)
+    local_models = [[ResourceAllocationAgent(Rmin=0, Rmax=7) for _ in range(4)] for _ in range(2)]
+
     ep_reward_list = []
     ep_mean_reward_list = []
     avg_reward_list = []
     loss_by_iter_list = []
 
     if train_mode == 'frl':
-        agent_global = GlobalAgentDQN(action_space_power=4, action_space_resource=8)
+        global_model = ResourceAllocationAgent(Rmin=0, Rmax=7)
 
     # try:
 
@@ -40,48 +71,25 @@ def train(train_mode='irl'):
 
         episodic_reward = 0
 
-        prev_state = env.reset()
         for step in range(max_step):
-            # 0. Render the environments (traffic_update)
-            env.render()
 
-            # tf_prev_state = tf.convert_to_tensor(prev_state)
-
-            # 1. We perform the action based on the current state
-            prev_state_power = np.sum(prev_state, axis=1)
-            action_power = np.array([[agent_power.act(prev_state_power[k])] for k in range(2)])
-            action_resource = np.array([[agent_resource.act(prev_state[k][n][:2]) for n in range(4)] for k in range(2)])
-            actions_all = (action_power, action_resource)
-
-            # 2. We send the collections of all the actions for both BSs to the environments
-            state, rewards, done = env.step(actions_all)
-            rewards_power_matrix, rewards_resource_matrix = rewards[0], rewards[1]
-            rewards_total = np.sum(rewards_power_matrix) + np.sum(rewards_resource_matrix)
-            episodic_reward += rewards_total
-            ep_mean_reward_list.append(rewards_total)
-
-            # 3. We perform local training:
-            loss = 0
+            reward_step, loss_step = 0, 0
             for k in range(2):
-                agent_power.record((prev_state_power[k], action_power[k], rewards_power_matrix[k][0], np.sum(state[k], axis=0)))
-
-                # Train the behaviour and target networks
-                loss_power, q_vals_power = agent_power.update()
-                agent_power.update_target()
-
-                loss += loss_power
-
                 for n in range(4):
-                    agent_resource.record((prev_state[k][n][:2], action_resource[k][n], rewards_resource_matrix[k][n], state[k][n][:2]))
+                    local_model = local_models[k][n]
+                    reward, loss = local_train(env, local_model, k, n)
+                    local_models[k][n] = local_model
+                    reward_step += reward
+                    loss_step += loss
+            reward_step = np.mean(reward_step)
+            loss_step   = np.mean(loss_step)
 
-                    loss_resource, q_vals_resource = agent_resource.update()
-                    agent_resource.update_target()
+            episodic_reward += reward_step
+            ep_mean_reward_list.append(reward_step)
+            loss_by_iter_list.append(loss_step)
+            print(f"step/episode: {step}/{ep} - Loss: {loss_step:.6e}")
 
-                    loss += loss_resource
-
-            loss_by_iter_list.append(loss)
-            print(f"step/episode: {step}/{ep} - Loss: {loss:.6e}")
-            if step%100 == 0:
+            if step%10 == 0:
                 # Display RBs info
                 print(f"{'rth':<5}{'kth':<5}{'nth':<5}{'mth':<5}{'is_allocated':<15}{'power':<10}")
                 print("-" * 45)
@@ -96,11 +104,10 @@ def train(train_mode='irl'):
                     print(f"{ue.traffic_curr:<15}{ue.delay:<10}{ue.packet_size:<15}{ue.num_rbs_allocated:<15}")
 
             # 4. We perform global training:
-
-            if done:
-                break
-
-            prev_state = state
+            if train_mode == 'frl':
+                fed_avg(global_model, local_models)
+                global_weight = global_model.get_weights()
+                local_models = [local_model.set_weights(global_weight) for local_model in local_models]
 
         print("Done!   step/episode:{}/{},   Acc. Mean. Reward: {}\n".format(step, ep, np.mean(ep_mean_reward_list)))
         ep_reward_list.append(episodic_reward)

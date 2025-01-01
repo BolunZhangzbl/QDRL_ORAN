@@ -12,7 +12,15 @@ from parameters import *
 
 # -- Functions
 
-class SlicingEnv(Env):
+
+"""
+eMBB (Enhanced Mobile Broadband): High-speed internet for applications like VR/AR.
+mMTC (Massive Machine-Type Communications): Supports IoT with low power and high device density.
+URLLC (Ultra-Reliable Low Latency Communications): For mission-critical applications like remote surgery.
+"""
+
+
+class SlicingEnv():
 
     def __init__(self):
         self.oran = ORAN()
@@ -24,46 +32,36 @@ class SlicingEnv(Env):
         # Ensure dm is a scalar (sum should already yield a single value)
         dm = float(np.sum([self.oran.get_total_delay(kth, nth, m) for m in range(3)]))
 
-        # Ensure Pk is a scalar
-        Pk = float(self.oran.BSs[kth].bs_power)  # Convert to float if necessary
-
         # Return as a list of 3 scalar values
-        state_info = [Hn, dm, Pk]
+        state_info = [Hn, dm]
 
         return state_info
 
-    def step(self, actions):
-        action_power = actions[0]
-        action_resource = actions[1]
+    def step(self, action, kth, nth):
 
         # 1. Perform the action at ORAN
-        # action.shape == (2,1)
-        self.oran.set_power(action_power)
 
         # action.shape == (2,4)
-        self.oran.set_rbs(action_resource)
+        self.oran.set_rbs(action, kth, nth)
 
         # 2. Calculate the reward
-        rewards_resource_matrix = self.oran.get_total_reward()   # (2,4)
-        rewards_power_matrix = np.mean(rewards_resource_matrix, axis=1) - alpha * np.array(action_power)   # (2,1)
+        self.reward = self.oran.get_slice_reward(kth, nth)   # (2,4)
 
-        self.rewards = (rewards_power_matrix, rewards_resource_matrix)
-
-        if np.mean(rewards_power_matrix) >= dict_reward_done.get('power') and \
-                np.mean(rewards_resource_matrix) >= dict_reward_done.get('resource'):
-
+        if self.reward >= dict_reward_done.get('resource'):
             self.done = True
 
         # 3. Get the current state info after performing action
-        # self.next_state.shape == (2,4,3)
-        self.next_state = np.array([[self.get_state_info(k, n) for n in range(4)] for k in range(2)])
+        # self.next_state.shape == (2,4,2)
+        # self.next_state = np.array([[self.get_state_info(k, n) for n in range(4)] for k in range(2)])
+        self.next_state = self.get_state_info(kth, nth)
 
         return self.next_state, self.rewards, self.done
 
-    def reset(self):
-        # self.state.shape == (2,4,3)
-        self.state = np.array([[self.get_state_info(k, n) for n in range(4)] for k in range(2)])
-        self.rewards = [0, 0]
+    def reset(self, kth, nth):
+        # self.state.shape == (2,4,2)
+        # self.state = np.array([[self.get_state_info(k, n) for n in range(4)] for k in range(2)])
+        self.state = self.get_state_info(kth, nth)
+        self.rewards = 0
         self.done = False
 
         return self.state
@@ -89,7 +87,7 @@ class RB:
         self.nth = nth   # the idx of the slice that the RB is allocated
         self.mth = mth   # the idx of the UE that the RB is allocated
         self.is_allocated = is_allocated
-        self.power = power
+        self.power = P_max / 100
 
     def __str__(self):
         """
@@ -128,8 +126,11 @@ class ORAN:
         # Define hyper-parameters
         self.tx_power_max = P_max
         self.tx_power_min = -P_max
-        self.BSs[0].bs_power = np.random.uniform(self.tx_power_min, self.tx_power_max)
-        self.BSs[1].bs_power = np.random.uniform(self.tx_power_min, self.tx_power_max)
+        # self.BSs[0].bs_power = np.random.uniform(self.tx_power_min, self.tx_power_max)
+        # self.BSs[1].bs_power = np.random.uniform(self.tx_power_min, self.tx_power_max)
+
+        self.BSs[0].bs_power = self.tx_power_max
+        self.BSs[1].bs_power = self.tx_power_max
         self.Br = bandwidth_per_rb  # Bandwidth per RB (Hz)
         self.N0 = N0  # Noise Power Density (dBm/Hz)
 
@@ -237,45 +238,35 @@ class ORAN:
 
         return rbs_dist_intra
 
-    def set_rbs(self, rbs_dist):
+    def set_rbs(self, rbs, kth, nth):
+        slice = self.BSs[kth].slices[nth]
+        # 1. Allocate RBs to the slice
+        slice.num_rbs_allocated = rbs
 
-        # rbs_dist is the action performed by the Resource Allocation Agent
-        # rbs_dist is the number of rbs distributions across 4 slices within a BS
-        # rbs_dist.shape == (2, 4)
+        # 2. Intra-slice RBs allopcation to UEs using PPF
+        rbs_dist_intra = self.intra_slice_allocate_ppf(kth, nth, rbs)
+        for m in range(len(rbs_dist_intra)):
+            slice.UEs[m].num_rbs_allocated = rbs_dist_intra[m]
+            slice.UEs[m].update_service_rate()
 
-        # Assignment Loop
-        for k in range(num_gnbs):
-            # 1. Allocate the RBs to the BS
-            sum_rbs = sum(rbs_dist[k])
-            self.BSs[k].num_rbs_allocated = sum_rbs
+            # 3. Update info in self.RBs
+            # 3.1 Find the indices of available RBs
+            indices_zero = list(itertools.islice((rb.rth for rb in self.RBs if rb.is_allocated == False), rbs_dist_intra[m]))
+            # 3.2 Update self.RBs
+            for r in indices_zero:
+                self.RBs[r].kth = kth
+                self.RBs[r].nth = nth
+                self.RBs[r].mth = m
+                self.RBs[r].is_allocated = True
 
-            for n in range(4):
-                # 2. Allocate the RBs to the slice
-                self.BSs[k].slices[n].num_rbs_allocated = rbs_dist[k][n]
-
-                # 3. Intra-slice RBs allocation to UEs using PPF
-                rbs_dist_intra = self.intra_slice_allocate_ppf(k, n, rbs_dist[k][n])
-                for m in range(len(rbs_dist_intra)):
-                    self.BSs[k].slices[n].UEs[m].num_rbs_allocated = rbs_dist_intra[m]
-                    self.BSs[k].slices[n].UEs[m].update_service_rate()
-
-                    # 4. Update info in the self.RBs
-                    # 4.1 Find the indices of available RBs
-                    indices_zero = list(itertools.islice((rb.rth for rb in self.RBs if rb.is_allocated==False), 3))
-                    # 4.2 Update self.RBs
-                    for r in indices_zero:
-                        self.RBs[r].kth = k
-                        self.RBs[r].nth = n
-                        self.RBs[r].mth = m
-                        self.RBs[r].is_allocated = True
-                    # 4.3 Add the indices of RBs to UE for easier release
-                        self.BSs[k].slices[n].UEs[m].rbs_indices.append(r)
+                # 3.3 Add the indices of RBs to UE for easier release
+                slice.UEs[m].rbs_indices.append(r)
 
     def set_power(self, a):
         # a.shape == (2, 1)
 
         for k in range(self.num_gnbs):
-            self.BSs[k].bs_power = a[k][0]
+            self.BSs[k].bs_power = a
 
             indices = [rb.rth for rb in self.RBs if rb.is_allocated == 1 and rb.kth == k]
 
@@ -298,18 +289,6 @@ class ORAN:
         reward *= slice.slice_weight
 
         return 0 if reward==float('-inf') else reward
-
-    def get_total_reward(self):
-        # reward_weighted_sum = 0
-        # for k in range(2):
-        #     for n in range(4):
-        #         reward_weighted_sum += self.get_slice_reward(k, n)
-        #
-        # return reward_weighted_sum
-
-        rewards_matrix = np.array([[self.get_slice_reward(k, n) for n in range(4)] for k in range(2)])
-
-        return rewards_matrix
 
     def update_ue_traffic(self):
         for k in range(self.num_gnbs):
@@ -360,7 +339,6 @@ class Slice:
         self.packet_size = dict_packet_size.get(slice_type)  # Bytes
         self.traffic_total = 0  # bps
         self.queue_total = 0  # bits
-        # self.service_rate = 2000  # Service rate per UE (bps)
 
         self.poisson_lambda = dict_poisson_lambda.get(slice_type)
 

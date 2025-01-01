@@ -56,8 +56,10 @@ alpha = 0.1   # punishment factor for the reward of power control agent
 
 ### Hyper-parameters for PPO
 
-max_step = 500
-num_episodes = 30
+max_step = 50
+num_episodes = 300
+num_rounds_local = 10
+
 last_n = 50
 
 clip_ratio = 0.2
