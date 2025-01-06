@@ -20,10 +20,13 @@ def local_train(env, agent, kth, nth):
 
     reward_local = 0
     loss_local = 0
-    prev_state = np.array(env.reset(kth, nth))
 
-    env.render()
-    for _ in range(num_rounds_local):
+    # env.render()
+    for num in range(num_rounds_local):
+        if num == 0:
+            prev_state = np.array(env.reset(kth, nth))
+        # 1.
+        env.oran.update_ue_traffic()
 
         action = agent.act(prev_state)
         state, reward, done = env.step(action, kth, nth)
@@ -36,6 +39,9 @@ def local_train(env, agent, kth, nth):
         loss_local += loss
 
         prev_state = state
+
+        # 2.
+        env.oran.update_ue_rbs()
 
     # print(f"Complete local training for client-({kth},{nth})")
 
@@ -71,6 +77,7 @@ def train(train_mode='irl'):
 
         episodic_reward = 0
 
+        # env.oran.update_ue_rbs()
         for step in range(max_step):
 
             reward_step, loss_step = 0, 0
@@ -81,28 +88,28 @@ def train(train_mode='irl'):
                     local_models[k][n] = local_model
                     reward_step += reward
                     loss_step += loss
-            reward_step = np.mean(reward_step)
-            loss_step   = np.mean(loss_step)
+            reward_step = reward_step / 8
+            loss_step   = loss_step / 8
 
             episodic_reward += reward_step
             ep_mean_reward_list.append(reward_step)
             loss_by_iter_list.append(loss_step)
-            print(f"step/episode: {step}/{ep} - Loss: {loss_step:.6e}")
+            print(f"step/episode: {step}/{ep} - Loss: {loss_step:.6e} - Reward: {reward_step:.6e}")
 
             if step%10 == 0:
                 # Display RBs info
-                print(f"{'rth':<5}{'kth':<5}{'nth':<5}{'mth':<5}{'is_allocated':<15}{'power':<10}")
-                print("-" * 45)
-                for rb in env.oran.RBs:
-                    print(f"{rb.rth:<5}{rb.kth:<5}{rb.nth:<5}{rb.mth:<5}{str(rb.is_allocated):<15}{rb.power:<10.2f}")
+                for kth_tmp in range(2):
+                    print(f"{'BS':<5}{'rth':<5}{'kth':<5}{'nth':<5}{'mth':<5}{'is_allocated':<15}{'power':<10}")
+                    print("-" * 50)
+                    for rb in env.oran.BSs[kth_tmp].RBs:
+                        print(f"{kth_tmp:<5}{rb.rth:<5}{rb.kth:<5}{rb.nth:<5}{rb.mth:<5}{str(rb.is_allocated):<15}{rb.power:<10.2f}")
 
                 # Display UEs info
-                print(f"{'traffic_curr':<15}{'delay':<10}{'packet_size':<15}{'allocated_rbs':<15}")
-                print("-" * 75)
+                print(f"{'service_rate':<15}{'delay':<10}{'packet_size':<15}{'allocated_rbs':<15}")
+                print("-" * 60)
                 UEs = [env.oran.BSs[k].slices[n].UEs[m] for m in range(3) for n in range(4) for k in range(2)]
                 for ue in UEs:
-                    print(f"{ue.traffic_curr:<15}{ue.delay:<10}{ue.packet_size:<15}{ue.num_rbs_allocated:<15}")
-
+                    print(f"{ue.service_rate:.6f}    {ue.delay:.6f}    {ue.packet_size:<15}{ue.num_rbs_allocated:<10}")
             # 4. We perform global training:
             if train_mode == 'frl':
                 fed_avg(global_model, local_models)

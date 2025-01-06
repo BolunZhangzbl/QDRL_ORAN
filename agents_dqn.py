@@ -185,7 +185,7 @@ class PowerContrlAgent(BaseAgentDQN):
 
 class ResourceAllocationAgent(BaseAgentDQN):
     def __init__(self, Rmin, Rmax, buffer_capacity=int(1e4), batch_size=128):
-        state_space = 2   # [Hn, sum dn]
+        state_space = 3   # [Hn, sum dn]
         action_space = (Rmax - Rmin + 1)
         action_mapper = ActionMapper(Rmin, Rmax)
 
