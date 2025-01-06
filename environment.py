@@ -419,10 +419,10 @@ class UE:
         # Convert traffic size in bits to number of packets
 
         # Step 1: Determine packets that can be serviced
-        service_capacity = min(self.queue_length + packets_per_sec, int(self.service_rate/(self.packet_size*bits_per_byte)))
+        service_capacity = min(self.queue_length + packets_per_sec, float(self.service_rate/(self.packet_size*bits_per_byte)))
 
         # Step 2: Update queue length
-        self.queue_length += (packets_per_sec - service_capacity)
+        self.queue_length += int(packets_per_sec - service_capacity)
 
         # Ensure queue length is non-negative
         self.queue_length = max(self.queue_length, 0)

@@ -96,7 +96,7 @@ def train(train_mode='irl'):
             loss_by_iter_list.append(loss_step)
             print(f"step/episode: {step}/{ep} - Loss: {loss_step:.6e} - Reward: {reward_step:.6e}")
 
-            if step%10 == 0:
+            if step%25 == 0:
                 # Display RBs info
                 for kth_tmp in range(2):
                     print(f"{'BS':<5}{'rth':<5}{'kth':<5}{'nth':<5}{'mth':<5}{'is_allocated':<15}{'power':<10}")
