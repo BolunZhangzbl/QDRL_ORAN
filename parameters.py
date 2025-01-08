@@ -41,10 +41,10 @@ dict_packet_size = dict(
 )
 
 dict_poisson_lambda = dict(
-    urllc2=3,
-    urllc1=3,
-    embb2=3,
-    embb1=3,
+    urllc2=60,
+    urllc1=60,
+    embb2=60,
+    embb1=60,
 )
 
 dict_reward_done = dict(
@@ -58,7 +58,7 @@ alpha = 0.1   # punishment factor for the reward of power control agent
 ### Hyper-parameters for MADQN
 
 max_step = 50
-num_episodes = 300
+num_episodes = 10
 num_rounds_local = 10
 
 last_n = 50
@@ -70,6 +70,11 @@ train_actor_iters = 80
 train_critic_iters = 80
 lam = 0.97
 target_kl = 0.01
+
+
+### Hyper-parameters for Quantum DQN
+num_layers = 3
+num_qubits = 3
 
 
 """

@@ -152,8 +152,8 @@ class ORAN:
         pl += s
 
         # Tx/Rx Antenna Gain
-        Gtx = tx_rx_ant_gain
-        Grx = tx_rx_ant_gain
+        Gtx = 10**(tx_rx_ant_gain/10)
+        Grx = 10**(tx_rx_ant_gain/10)
 
         # channel gain
         gkm = (Gtx * Grx) / (10**(pl / 10))

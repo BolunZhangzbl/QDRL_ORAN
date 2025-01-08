@@ -29,9 +29,9 @@ class ActionMapper:
 
 def save_lists(file_path, ep_reward_list, ep_mean_reward_list, avg_reward_list, loss_by_iter_list):
 
-    np.savetxt(os.path.join(file_path, r"ep_reward_list"), ep_reward_list)
-    np.savetxt(os.path.join(file_path, r"ep_mean_reward_list"), ep_mean_reward_list)
-    np.savetxt(os.path.join(file_path, r"avg_reward_list"), avg_reward_list)
-    np.savetxt(os.path.join(file_path, r"loss_by_iter_list"), loss_by_iter_list)
+    np.savetxt(os.path.join(file_path, r"ep_reward_list.txt"), ep_reward_list)
+    np.savetxt(os.path.join(file_path, r"ep_mean_reward_list.txt"), ep_mean_reward_list)
+    np.savetxt(os.path.join(file_path, r"avg_reward_list.txt"), avg_reward_list)
+    np.savetxt(os.path.join(file_path, r"loss_by_iter_list.txt"), loss_by_iter_list)
 
     print(f"Successfully saved lists in {file_path}!!!")

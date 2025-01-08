@@ -7,6 +7,9 @@ from tensorflow.keras.layers import Input, Dense, GaussianNoise, Lambda, Dropout
     Reshape, Add, Embedding, Flatten, Conv1D, BatchNormalization, Embedding, LSTM, Activation
 from tensorflow.keras.models import Model
 
+import pennylane as qml
+from pennylane.templates import StronglyEntanglingLayers, BasicEntanglerLayers
+
 # -- Private Imports
 from parameters import *
 from utils import *
@@ -20,32 +23,53 @@ from utils import *
 We will design BaseAgent for other algos including DDPG, PPO
 """
 
+def create_circuit(dev, num_qubits):
+    if dev is None:
+        dev = qml.device("default.qubit", wires=num_qubits)
+
+    def layer1(layer_weights):
+        """
+        q layer for fading:
+        :param layer_weights:
+        :return:
+        """
+        for wire in range(num_qubits):
+            qml.RY(layer_weights[wire, 0] * np.pi, wires=wire)
+        for wire in range(0, num_qubits - 1):
+            qml.CNOT(wires=[wire, (wire + 1)])
+
+    @qml.qnode(dev, interface='auto', diff_method='best')
+    def qcircuit(inputs, weights):
+
+        qml.AngleEmbedding(inputs, wires=range(num_qubits), rotation='X')
+
+        for layer_weights in weights:
+            layer1(layer_weights)
+
+        return qml.probs(wires=range(num_qubits))
+
+    return qcircuit
+
+
 # Global Model for FDRL - similar to Critic Network
 
+class QCircuitKeras(tf.keras.models.Model):
+    def __init__(self, **kwargs):
+        super(QCircuitKeras, self).__init__(**kwargs)
 
-class GlobalAgentDQN(tf.keras.models.Model):
-    def __init__(self, action_space_power, action_space_resource):
-        super(GlobalAgentDQN, self).__init__()
+        dev = qml.device("default.qubit", wires=range(num_qubits))
+        qcircuit = create_circuit(dev, num_qubits)
+        weight_shapes = {"weights": {num_layers, num_qubits, 1}}
+        self.qmodel = qml.qnn.KerasLayer(qcircuit, weight_shapes, output_dim=num_qubits, name='qmodel', dtype=tf.float64)
 
-        action_space_total = action_space_power + action_space_resource
+    def call(self, inputs):
 
-        # Shared layers for processing both agents' states together
-        self.d1 = tf.keras.layers.Dense(128, activation='relu')
-        self.d2 = tf.keras.layers.Dense(128, activation='relu')
-
-        # Output layer produces a combined action/decision space
-        self.output_layer = tf.keras.layers.Dense(action_space_total)
-
-    def call(self, combined_inputs):
-        x  = self.d1(combined_inputs)
-        x1 = self.d2(x)
-        combined_outputs = self.output_layer(x1)
-
-        return combined_outputs
+        outputs = self.qmodel(inputs)
+        return outputs
 
 
 # Base Agent for DQN
-class BaseAgentDQN:
+class BaseAgentDQN_Quantum:
     def __init__(self, state_space, action_space, action_mapper,
                  buffer_capacity=int(1e4), batch_size=128):
         self.state_space = state_space
@@ -71,19 +95,9 @@ class BaseAgentDQN:
         self.optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
         self.gamma = 0.99  # Discount factor
 
-        # Create Deep Q Network
-        self.model = self.create_model()
-        self.target_model = self.create_model()
-        print(self.model.summary())
-
-    def create_model(self):
-        input_shape = (self.state_space,)
-        X_input = Input(input_shape)
-        X = Dense(64, activation="relu")(X_input)
-        X = Dense(64, activation="relu")(X)
-        X = Dense(self.action_space, activation="linear")(X)
-        model = Model(inputs=X_input, outputs=X)
-        return model
+        # Create Quantum Deep Q Network
+        self.model = QCircuitKeras()
+        self.target_model = QCircuitKeras()
 
     def record(self, obs_tuple):
         assert len(obs_tuple) == 4
@@ -171,7 +185,7 @@ class BaseAgentDQN:
         self.model.load_model_weights(file_path)
 
 
-class PowerContrlAgent(BaseAgentDQN):
+class PowerContrlAgent_Quantum(BaseAgentDQN_Quantum):
     def __init__(self, Lmin, Lmax, buffer_capacity=int(1e4), batch_size=128):
         state_space = 3   # [Hn, sum dn, Pk]
         action_space = (Lmax - Lmin + 1)
@@ -183,9 +197,9 @@ class PowerContrlAgent(BaseAgentDQN):
         self.Lmin = Lmin   # Lower bound for action
 
 
-class ResourceAllocationAgent(BaseAgentDQN):
+class ResourceAllocationAgent_Quantum(BaseAgentDQN_Quantum):
     def __init__(self, Rmin, Rmax, buffer_capacity=int(1e4), batch_size=128):
-        state_space = 3   # [Hn, sum dn, num available RBs]
+        state_space = 3   # [Hn, sum dn]
         action_space = (Rmax - Rmin + 1)
         action_mapper = ActionMapper(Rmin, Rmax)
 
