@@ -18,27 +18,39 @@ dict_filename = dict(
     avg_reward="avg_reward_list.txt"
 )
 
-dict_markers = dict(
-    irl='^-',
-    frl='o--',
-)
 
-dict_colors = dict(
-    irl='blue',
-    frl='red',
-)
+dict_markers = {
+    'qnn-irl': '^-',
+    'qnn-frl': 's-',
+    'dnn-irl': 'o--',
+    'dnn-frl': 'D--'
+}
+
+dict_colors = {
+    'qnn-irl': 'blue',
+    'qnn-frl': 'green',
+    'dnn-irl': 'red',
+    'dnn-frl': 'orange'
+}
 
 
 # -- Functions
 
-def plot_convergence(metric, str_lambda='3366'):
+def plot_convergence(metric, str_lambda='3366', model_type='both'):
 
     assert metric in ('loss', 'reward', 'avg_reward')
+    assert model_type in ('both', 'qnn', 'dnn')
     file_name = dict_filename.get(metric)
 
-    dict_file_path = {key: os.path.join(dir_base, "save_dqn", str_lambda, key, "save_lists", file_name) for key in ['frl', 'irl']}
+    if model_type == 'both':
+        dict_file_path = {
+            f"{model_type}-{key}": os.path.join(dir_base, "save_dqn", model_type, str_lambda, key, "save_lists", file_name) for
+            model_type in ['qnn', 'dnn'] for key in ['frl', 'irl']}
+    else:
+        dict_file_path = {f"{model_type}-{key}": os.path.join(dir_base, "save_dqn", model_type, str_lambda, key, "save_lists", file_name) for key in ['frl', 'irl']}
+    print(dict_file_path)
+
     dict_metric_list = {key: np.loadtxt(val) for key, val in dict_file_path.items()}
-    print(dict_metric_list)
     dict_iter_range = {key: np.array(range(len(val))) for key, val in dict_metric_list.items()}
 
     plt.figure(figsize=(15, 10))
@@ -61,4 +73,4 @@ def plot_convergence(metric, str_lambda='3366'):
     plt.show()
 
 
-plot_convergence(metric='loss', str_lambda=''.join(str(val) for val in dict_poisson_lambda.values()))
+plot_convergence(metric='loss', str_lambda='60606060', model_type='both')

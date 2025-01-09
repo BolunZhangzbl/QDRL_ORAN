@@ -5,11 +5,11 @@ import numpy as np
 
 from environment import *
 from agents_dqn import *
-# from agents_ddpg import *
-# from agents_ppo import *
+from agents_qdqn import *
 
 # -- Global Variables
-
+tf.get_logger().setLevel('ERROR')
+tf.keras.backend.set_floatx('float64')
 
 # -- Functions
 
@@ -91,11 +91,13 @@ def fed_avg(global_model, local_models):
     global_model.model.set_weights(avg_weight)
 
 
-def train(train_mode='irl'):
-    assert train_mode in ('irl', 'frl', 'crl')
+def train(train_mode='irl', model_type='dnn', save=False):
+    assert train_mode in ('irl', 'frl')
+    assert model_type in ('qnn', 'dnn')
 
     env = SlicingEnv()
-    local_models = [ResourceAllocationAgent(Rmin=0, Rmax=7) for _ in range(2*4)]
+    agent_class = ResourceAllocationAgent if model_type == 'dnn' else ResourceAllocationAgent_Quantum
+    local_models = [agent_class(Rmin=0, Rmax=7) for _ in range(2*4)]
 
     ep_reward_list = []
     ep_mean_reward_list = []
@@ -103,7 +105,7 @@ def train(train_mode='irl'):
     loss_by_iter_list = []
 
     if train_mode == 'frl':
-        global_model = ResourceAllocationAgent(Rmin=0, Rmax=7)
+        global_model = agent_class(Rmin=0, Rmax=7)
 
     try:
 
@@ -163,11 +165,12 @@ def train(train_mode='irl'):
                 break
 
     finally:
-        dir_base = os.path.dirname(os.path.abspath(__file__))
-        str_lambda = ''.join(str(val) for val in dict_poisson_lambda.values())
-        file_path = os.path.join(dir_base, f"save_dqn/{str_lambda}/{train_mode}/save_lists")
-        save_lists(file_path, ep_reward_list, ep_mean_reward_list, avg_reward_list, loss_by_iter_list)
+        if save:
+            dir_base = os.path.dirname(os.path.abspath(__file__))
+            str_lambda = ''.join(str(val) for val in dict_poisson_lambda.values())
+            file_path = os.path.join(dir_base, f"save_dqn/{model_type}/{str_lambda}/{train_mode}/save_lists")
+            save_lists(file_path, ep_reward_list, ep_mean_reward_list, avg_reward_list, loss_by_iter_list)
 
 
-train(train_mode='frl')
-train(train_mode='irl')
+train(train_mode='frl', model_type='qnn', save=True)
+train(train_mode='irl', model_type='qnn', save=True)

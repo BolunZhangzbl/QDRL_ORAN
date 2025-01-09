@@ -38,7 +38,7 @@ def create_circuit(dev, num_qubits):
         for wire in range(0, num_qubits - 1):
             qml.CNOT(wires=[wire, (wire + 1)])
 
-    @qml.qnode(dev, interface='auto', diff_method='best')
+    @qml.qnode(dev, interface='tf', diff_method='best')
     def qcircuit(inputs, weights):
 
         qml.AngleEmbedding(inputs, wires=range(num_qubits), rotation='X')
@@ -57,10 +57,11 @@ class QCircuitKeras(tf.keras.models.Model):
     def __init__(self, **kwargs):
         super(QCircuitKeras, self).__init__(**kwargs)
 
-        dev = qml.device("default.qubit", wires=range(num_qubits))
+        dev = qml.device("default.qubit", wires=num_qubits)
         qcircuit = create_circuit(dev, num_qubits)
-        weight_shapes = {"weights": {num_layers, num_qubits, 1}}
-        self.qmodel = qml.qnn.KerasLayer(qcircuit, weight_shapes, output_dim=num_qubits, name='qmodel', dtype=tf.float64)
+        weight_shapes = {"weights": (num_layers, num_qubits, 1)}
+        self.qmodel = qml.qnn.KerasLayer(qcircuit, weight_shapes, output_dim=num_qubits,
+                                         name='qmodel', dtype=tf.float64)
 
     def call(self, inputs):
 
@@ -150,12 +151,15 @@ class BaseAgentDQN_Quantum:
             target_q_vals = tf.reduce_max(self.target_model(next_state_sample, training=True), axis=1)
             # print(f"target_q_vals shape: {target_q_vals} - {target_q_vals.shape}")
 
+            reward_sample = tf.cast(reward_sample, tf.float64)
+            # print(f"reward_sample: {reward_sample.dtype}")
+            # print(f"target_q_vals: {target_q_vals.dtype}")
             y = reward_sample + tf.expand_dims(self.gamma * target_q_vals, axis=1)
-            # print(f"reward_sample shape: {reward_sample} - {reward_sample.shape}")
-            # print(f"y shape: {y} - {y.shape}")
+            # print(f"y: {y} - {y.dtype}")
 
             mask = tf.one_hot(action_sample_int, self.action_space)
-            # print(f"mask shape: {mask} - {mask.shape}")
+            mask = tf.cast(mask, tf.float64)
+            # print(f"mask shape: {mask.dtype}")
 
             q_action = tf.reduce_sum(tf.multiply(q_vals, mask), axis=1)
             # print(f"q_action shape: {q_action} - {q_action.shape}")
