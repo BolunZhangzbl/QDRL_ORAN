@@ -41,10 +41,10 @@ dict_packet_size = dict(
 )
 
 dict_poisson_lambda = dict(
-    urllc2=6,
-    urllc1=6,
-    embb2=6,
-    embb1=6,
+    urllc2=60,
+    urllc1=60,
+    embb2=60,
+    embb1=60,
 )
 
 dict_reward_done = dict(

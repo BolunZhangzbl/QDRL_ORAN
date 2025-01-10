@@ -8,8 +8,8 @@ from agents_dqn import *
 from agents_qdqn import *
 
 # -- Global Variables
-tf.get_logger().setLevel('ERROR')
-tf.keras.backend.set_floatx('float64')
+# tf.get_logger().setLevel('ERROR')
+# tf.keras.backend.set_floatx('float64')
 
 # -- Functions
 
@@ -26,6 +26,7 @@ def local_train(env, local_models):
         env.oran.update_ue_traffic()
 
         # 2. Perform local training across 8 slices
+        # i.e., assign rbs to each slice or UEs, given the observation of delay, queue length, and number of available RBs
         for k in range(2):
             for n in range(4):
                 local_model = local_models[k*4+n]
@@ -44,7 +45,10 @@ def local_train(env, local_models):
                 # Assign the updated local model to list
                 local_models[k*4+n] = local_model
 
-        # 3. Clear and release RBs
+        # # 3. After allocating RBs, update the queue
+        # env.oran.update_ue_queue()
+
+        # 4. Clear and release RBs
         env.oran.update_ue_rbs()
 
     reward_step /= num_rounds_local

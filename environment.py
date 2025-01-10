@@ -264,6 +264,7 @@ class ORAN:
         for m in range(len(rbs_dist_intra)):
             slice.UEs[m].num_rbs_allocated += rbs_dist_intra[m]
             Ckm = self.get_link_capacity(kth, m)
+
             slice.UEs[m].update_service_rate(Ckm)
 
             # 3. Update info in self.RBs
@@ -278,6 +279,9 @@ class ORAN:
 
                 # 3.3 Add the indices of RBs to UE for easier release
                 slice.UEs[m].rbs_indices.append(r)
+
+        # 4. Update queue
+        slice.update_queue()
 
     # def set_power(self, a):
     #     # a.shape == (2, 1)
@@ -296,9 +300,9 @@ class ORAN:
         slice = self.BSs[kth].slices[nth]
         if slice.queue_total != 0:
             if slice.slice_type.startswith('embb'):
-                reward = np.arctan(self.BSs[kth].slices[nth].traffic_total)
+                reward = np.arctan(self.BSs[kth].slices[nth].traffic_total)   # traffic_total == throughput
             else:
-                reward = 1 - np.sum([self.get_total_delay(kth, nth, m) for m in range(3)])
+                reward = 1 - np.sum([self.get_total_delay(kth, nth, m) for m in range(3)])   #
         else:
             reward = 0
         # Multiply by its weight
@@ -310,6 +314,11 @@ class ORAN:
         for k in range(self.num_gnbs):
             for n in range(4):
                 self.BSs[k].slices[n].update_traffic()
+
+    def update_ue_queue(self):
+        for k in range(self.num_gnbs):
+            for n in range(4):
+                self.BSs[k].slices[n].update_queue()
 
     def update_ue_rbs(self):
         for k in range(self.num_gnbs):
@@ -383,8 +392,13 @@ class Slice:
         self.traffic_total = np.sum([ue.service_rate for ue in self.UEs])
         self.queue_total = np.sum([ue.get_queue_length_bits() for ue in self.UEs])
 
-        # return self.traffic_total, self.queue_total
+    def update_queue(self):
 
+        for ue in self.UEs:
+            ue.add_to_queue(0.0)
+
+        self.traffic_total = np.sum([ue.service_rate for ue in self.UEs])
+        self.queue_total = np.sum([ue.get_queue_length_bits() for ue in self.UEs])
 
 class UE:
     """

@@ -35,3 +35,16 @@ def save_lists(file_path, ep_reward_list, ep_mean_reward_list, avg_reward_list, 
     np.savetxt(os.path.join(file_path, r"loss_by_iter_list.txt"), loss_by_iter_list)
 
     print(f"Successfully saved lists in {file_path}!!!")
+
+
+
+def clear_dir(dir_base):
+    """"""
+    for root, dirs, files in os.walk(dir_base):
+        for file in files:
+            file_path = os.path.join(root, file)
+            try:
+                os.remove(file_path)
+                print(f"Successfully deleted file: {file_path}")
+            except Exception as e:
+                print(f"Failed to delete {file_path}")

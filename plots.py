@@ -59,7 +59,7 @@ def plot_convergence(metric, str_lambda='3366', model_type='both'):
                      mfc='none', alpha=0.8, lw=2, markersize=3, label=key.upper())
 
     # plt.xlim([-10, 96])
-    # plt.ylim([-2000000.0, 0])
+    # plt.ylim([1e7, 1e8])
 
     scale_type = 'linear' if 'reward' in metric else 'log'
     plt.yscale(scale_type)

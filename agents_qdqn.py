@@ -91,9 +91,9 @@ class BaseAgentDQN_Quantum:
         self.epsilon = 1.0
         self.epsilon_min = 0.01
         self.epsilon_decay = 0.99
-        # self.loss_func = tf.keras.losses.MeanSquaredError()
-        self.loss_func = tf.keras.losses.Huber()
-        self.optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
+        self.loss_func = tf.keras.losses.MeanSquaredError()
+        # self.loss_func = tf.keras.losses.Huber()
+        self.optimizer = tf.keras.optimizers.SGD(learning_rate=0.001)
         self.gamma = 0.99  # Discount factor
 
         # Create Quantum Deep Q Network
