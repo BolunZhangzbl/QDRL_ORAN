@@ -186,7 +186,7 @@ class BaseAgentDQN_Quantum:
         self.model.load_model_weights(file_path)
 
 
-class PowerContrlAgent_Quantum(BaseAgentDQN_Quantum):
+class PowerControlAgent_Quantum(BaseAgentDQN_Quantum):
     def __init__(self, Lmin, Lmax, buffer_capacity=int(1e4), batch_size=32):
         state_space = 3   # [Hn, sum dn, Pk]
         action_space = (Lmax - Lmin + 1)

@@ -176,7 +176,7 @@ class BaseAgentDQN:
         self.model.load_model_weights(file_path)
 
 
-class PowerContrlAgent(BaseAgentDQN):
+class PowerControlAgent(BaseAgentDQN):
     def __init__(self, Lmin, Lmax, buffer_capacity=int(1e4), batch_size=128):
         state_space = 3   # [Hn, sum dn, Pk]
         action_space = (Lmax - Lmin + 1)

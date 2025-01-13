@@ -102,8 +102,8 @@ def train(train_mode='irl', model_type='dnn', save=False):
     assert model_type in ('qnn', 'dnn')
 
     env = SlicingEnv()
-    agent_class = ResourceAllocationAgent if model_type == 'dnn' else ResourceAllocationAgent_Quantum
-    local_models = [agent_class(Rmin=0, Rmax=7) for _ in range(2*4)]
+    agent_class = PowerControlAgent if model_type == 'dnn' else PowerControlAgent_Quantum
+    local_models = [agent_class(Lmin=0, Lmax=7) for _ in range(2*4)]
 
     ep_reward_list = []
     ep_mean_reward_list = []
@@ -111,7 +111,7 @@ def train(train_mode='irl', model_type='dnn', save=False):
     loss_by_iter_list = []
 
     if train_mode == 'frl':
-        global_model = agent_class(Rmin=0, Rmax=7)
+        global_model = agent_class(Lmin=0, Lmax=7)
 
     try:
 
