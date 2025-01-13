@@ -27,16 +27,19 @@ class SlicingEnv():
 
     def get_state_info(self, kth, nth):
         # Ensure Hn is a scalar
-        Hn = float(self.oran.BSs[kth].slices[nth].queue_total)  # Convert to float if not already scalar
+        Hn = self.oran.BSs[kth].slices[nth].queue_total  # Convert to float if not already scalar
 
         # Ensure dm is a scalar (sum should already yield a single value)
-        dm = float(np.sum([self.oran.get_total_delay(kth, nth, m) for m in range(3)]))
+        # dm = float(np.sum([self.oran.get_total_delay(kth, nth, m) for m in range(3)]))
+
+        # Current service rate
+        Bn = sum([self.oran.BSs[kth].slices[nth].UEs[m].service_rate for m in range(3)])
 
         # number of available in BS kth
         num_rbs_available = int(100 - self.oran.BSs[kth].num_rbs_allocated)
 
         # Return as a list of 3 scalar values
-        state_info = [Hn, dm, num_rbs_available]
+        state_info = [Hn, Bn, num_rbs_available]
 
         return state_info
 
@@ -400,7 +403,7 @@ class Slice:
             ue.update_queue()
 
         self.traffic_total = np.sum([ue.service_rate for ue in self.UEs])
-        self.queue_total = np.sum([ue.get_queue_length_bits() for ue in self.UEs])
+        self.queue_total = np.sum([ue.queue_length for ue in self.UEs])
 
 class UE:
     """
