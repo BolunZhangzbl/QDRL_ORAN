@@ -90,7 +90,8 @@ class RB:
         self.nth = nth   # the idx of the slice that the RB is allocated
         self.mth = mth   # the idx of the UE that the RB is allocated
         self.is_allocated = is_allocated
-        self.power = (10**(P_max/10) * 1e-3) / 100
+        self.power = power
+        # self.power = (10**(P_max/10) * 1e-3) / 100
 
     def __str__(self):
         """
@@ -222,80 +223,81 @@ class ORAN:
 
         return total_delay
 
-    def intra_slice_allocate_ppf(self, kth, nth, sum_rbs):
-        """
-        :return: the idx of the UE for PPF allocation
-        """
-        # nth {0, 1, 2, 3}      Idx of Slice
-        # mth {0, 1, 2}         Idx of mobile devices
-        assert isinstance(sum_rbs, (int, np.integer))
-
-        Ckms = [self.get_link_capacity(kth, m) for m in range(3)]
-        UEs = self.BSs[kth].slices[nth].UEs
-
-        tx_rates = [ue.service_rate_avg for ue in UEs]
-        ppf_dist = [Ckms[idx]/tx_rates[idx] if tx_rates[idx]!=0 else 0 for idx in range(3)]
-
-        if np.sum(ppf_dist) == 0:
-            ppf_dist = np.random.randint(100, size=3)
-        ppf_dist_total = sum(ppf_dist)
-        rbs_dist_intra = [round(sum_rbs * dist / ppf_dist_total) for dist in ppf_dist]
-
-        # Adjust if there is a rounding issue (e.g., the sum of result isn't equal to integer)
-        diff = sum_rbs - sum(rbs_dist_intra)
-        for i in range(diff):
-            rbs_dist_intra[i % len(rbs_dist_intra)] += 1
-
-        return rbs_dist_intra
-
-    def set_rbs(self, rbs, kth, nth):
-        ### Check if there is available RBs in BS
-        rbs = min(rbs, 100-self.BSs[kth].num_rbs_allocated)
-
-        # 0. Allocate RBs to the BS
-        self.BSs[kth].num_rbs_allocated += rbs
-
-        slice = self.BSs[kth].slices[nth]
-        # 1. Allocate RBs to the slice
-        slice.num_rbs_allocated += rbs
-
-        # 2. Intra-slice RBs allopcation to UEs using PPF
-        rbs_dist_intra = self.intra_slice_allocate_ppf(kth, nth, rbs)
-        for m in range(len(rbs_dist_intra)):
-            slice.num_rbs_allocated += rbs_dist_intra[m]
-            slice.UEs[m].num_rbs_allocated += rbs_dist_intra[m]
-
-            Ckm = self.get_link_capacity(kth, m)
-            slice.UEs[m].update_service_rate(Ckm)
-
-            # 3. Update info in self.RBs
-            # 3.1 Find the indices of available RBs
-            indices_zero = list(itertools.islice((rb.rth for rb in self.BSs[kth].RBs if rb.is_allocated == False), rbs_dist_intra[m]))
-            # 3.2 Update self.RBs
-            for r in indices_zero:
-                self.BSs[kth].RBs[r].kth = kth
-                self.BSs[kth].RBs[r].nth = nth
-                self.BSs[kth].RBs[r].mth = m
-                self.BSs[kth].RBs[r].is_allocated = True
-
-                # 3.3 Add the indices of RBs to UE for easier release
-                slice.UEs[m].rbs_indices.append(r)
-
-        # 4. Update queue
-        slice.update_queue()
-
-    # def set_power(self, a):
-    #     # a.shape == (2, 1)
+    # def intra_slice_allocate_ppf(self, kth, nth, sum_rbs):
+    #     """
+    #     :return: the idx of the UE for PPF allocation
+    #     """
+    #     # nth {0, 1, 2, 3}      Idx of Slice
+    #     # mth {0, 1, 2}         Idx of mobile devices
+    #     assert isinstance(sum_rbs, (int, np.integer))
     #
-    #     for k in range(self.num_gnbs):
-    #         self.BSs[k].bs_power = a
+    #     Ckms = [self.get_link_capacity(kth, m) for m in range(3)]
+    #     UEs = self.BSs[kth].slices[nth].UEs
     #
-    #         indices = [rb.rth for rb in self.BSs[k].RBs if rb.is_allocated == 1 and rb.kth == k]
+    #     tx_rates = [ue.service_rate_avg for ue in UEs]
+    #     ppf_dist = [Ckms[idx]/tx_rates[idx] if tx_rates[idx]!=0 else 0 for idx in range(3)]
     #
-    #         # Ensure the Tx Power is uniformly distributed across all the RBs
-    #         a_uniform = self.BSs[k].bs_power / len(indices)
-    #         for idx in indices:
-    #             self.BSs[k].RBs[idx].power = a_uniform
+    #     if np.sum(ppf_dist) == 0:
+    #         ppf_dist = np.random.randint(100, size=3)
+    #     ppf_dist_total = sum(ppf_dist)
+    #     rbs_dist_intra = [round(sum_rbs * dist / ppf_dist_total) for dist in ppf_dist]
+    #
+    #     # Adjust if there is a rounding issue (e.g., the sum of result isn't equal to integer)
+    #     diff = sum_rbs - sum(rbs_dist_intra)
+    #     for i in range(diff):
+    #         rbs_dist_intra[i % len(rbs_dist_intra)] += 1
+    #
+    #     return rbs_dist_intra
+    #
+    # def set_rbs(self, rbs, kth, nth):
+    #     ### Check if there is available RBs in BS
+    #     rbs = min(rbs, 100-self.BSs[kth].num_rbs_allocated)
+    #
+    #     # 0. Allocate RBs to the BS
+    #     self.BSs[kth].num_rbs_allocated += rbs
+    #
+    #     slice = self.BSs[kth].slices[nth]
+    #     # 1. Allocate RBs to the slice
+    #     slice.num_rbs_allocated += rbs
+    #
+    #     # 2. Intra-slice RBs allopcation to UEs using PPF
+    #     rbs_dist_intra = self.intra_slice_allocate_ppf(kth, nth, rbs)
+    #     for m in range(len(rbs_dist_intra)):
+    #         slice.num_rbs_allocated += rbs_dist_intra[m]
+    #         slice.UEs[m].num_rbs_allocated += rbs_dist_intra[m]
+    #
+    #         Ckm = self.get_link_capacity(kth, m)
+    #         slice.UEs[m].update_service_rate(Ckm)
+    #
+    #         # 3. Update info in self.RBs
+    #         # 3.1 Find the indices of available RBs
+    #         indices_zero = list(itertools.islice((rb.rth for rb in self.BSs[kth].RBs if rb.is_allocated == False), rbs_dist_intra[m]))
+    #         # 3.2 Update self.RBs
+    #         for r in indices_zero:
+    #             self.BSs[kth].RBs[r].kth = kth
+    #             self.BSs[kth].RBs[r].nth = nth
+    #             self.BSs[kth].RBs[r].mth = m
+    #             self.BSs[kth].RBs[r].is_allocated = True
+    #
+    #             # 3.3 Add the indices of RBs to UE for easier release
+    #             slice.UEs[m].rbs_indices.append(r)
+    #
+    #     # 4. Update queue
+    #     slice.update_queue()
+
+    def set_power(self, a, kth, nth):
+
+
+
+        for k in range(self.num_gnbs):
+            self.BSs[k].bs_power = a
+
+            indices = [rb.rth for rb in self.BSs[k].RBs if rb.is_allocated == 1 and rb.kth == k]
+
+            # Ensure the Tx Power is uniformly distributed across all the RBs
+            a_uniform = self.BSs[k].bs_power / len(indices)
+            for idx in indices:
+                self.BSs[k].RBs[idx].power = a_uniform
 
     def get_slice_reward(self, kth, nth):
         slice = self.BSs[kth].slices[nth]
@@ -361,14 +363,14 @@ class Slice:
     """
     General Class for Network Slice: eMBB or URLLC
     """
-    def __init__(self, slice_type, num_ues=3, num_rbs_allocated=0):
+    def __init__(self, slice_type, num_ues=3, power=0):
 
         assert slice_type in dict_slice_weights.keys()
         self.slice_type = slice_type
         self.slice_weight = dict_slice_weights.get(slice_type)
 
         self.num_ues = num_ues
-        self.num_rbs_allocated = num_rbs_allocated
+        self.power = power
 
         # Traffic Flow
         self.packet_size = dict_packet_size.get(slice_type)  # Bytes
