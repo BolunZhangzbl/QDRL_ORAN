@@ -44,7 +44,7 @@ class SlicingEnv():
 
         # 1. Perform the action at ORAN
 
-        # action.shape == (8,)
+        # action.shape == (1,)
         self.oran.set_rbs(action, kth, nth)
 
         # 2. Calculate the reward
@@ -262,9 +262,10 @@ class ORAN:
         # 2. Intra-slice RBs allopcation to UEs using PPF
         rbs_dist_intra = self.intra_slice_allocate_ppf(kth, nth, rbs)
         for m in range(len(rbs_dist_intra)):
+            slice.num_rbs_allocated += rbs_dist_intra[m]
             slice.UEs[m].num_rbs_allocated += rbs_dist_intra[m]
-            Ckm = self.get_link_capacity(kth, m)
 
+            Ckm = self.get_link_capacity(kth, m)
             slice.UEs[m].update_service_rate(Ckm)
 
             # 3. Update info in self.RBs
@@ -303,6 +304,7 @@ class ORAN:
                 reward = np.arctan(self.BSs[kth].slices[nth].traffic_total)   # traffic_total == throughput
             else:
                 reward = 1 - np.sum([self.get_total_delay(kth, nth, m) for m in range(3)])   #
+                # reward = 1 - np.arctan(np.sum([self.get_total_delay(kth, nth, m) for m in range(3)]))
         else:
             reward = 0
         # Multiply by its weight
@@ -395,7 +397,7 @@ class Slice:
     def update_queue(self):
 
         for ue in self.UEs:
-            ue.add_to_queue(0.0)
+            ue.update_queue()
 
         self.traffic_total = np.sum([ue.service_rate for ue in self.UEs])
         self.queue_total = np.sum([ue.get_queue_length_bits() for ue in self.UEs])
@@ -433,10 +435,24 @@ class UE:
         # Convert traffic size in bits to number of packets
 
         # Step 1: Determine packets that can be serviced
-        service_capacity = min(self.queue_length + packets_per_sec, float(self.service_rate/(self.packet_size*bits_per_byte)))
+        # service_capacity = min(self.queue_length + packets_per_sec, float(self.service_rate/(self.packet_size*bits_per_byte)))
 
         # Step 2: Update queue length
-        self.queue_length += int(packets_per_sec - service_capacity)
+        self.queue_length += int(packets_per_sec)
+
+        # Ensure queue length is non-negative
+        self.queue_length = max(self.queue_length, 0)
+
+        # Step 3: Calculate the queue delay based on the number of packets in the queue
+        self.delay = self.calculate_queue_delay()
+
+    def update_queue(self):
+        # Step 1: Determine packets that can be serviced
+        service_capacity = float(self.service_rate / (self.packet_size * bits_per_byte))
+
+        # Step 2: Update queue length
+        self.queue_length -= service_capacity
+        self.queue_length = round(self.queue_length)
 
         # Ensure queue length is non-negative
         self.queue_length = max(self.queue_length, 0)
@@ -452,7 +468,7 @@ class UE:
         """
         queue_length_bits = self.get_queue_length_bits()
         # Time to serve the current queue in seconds
-        queue_delay = queue_length_bits / self.service_rate if self.service_rate!=0 else queue_length_bits
+        queue_delay = queue_length_bits / self.service_rate if self.service_rate!=0 else queue_length_bits/0.001
 
         return queue_delay
 

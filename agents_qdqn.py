@@ -62,10 +62,14 @@ class QCircuitKeras(tf.keras.models.Model):
         weight_shapes = {"weights": (num_layers, num_qubits, 1)}
         self.qmodel = qml.qnn.KerasLayer(qcircuit, weight_shapes, output_dim=num_qubits,
                                          name='qmodel', dtype=tf.float64)
+        # self.d1 = Dense(3, activation='relu')
+        # self.d2 = Dense(8, activation='linear')
 
     def call(self, inputs):
 
+        # inputs = self.d1(inputs)
         outputs = self.qmodel(inputs)
+        # outputs = self.d2(outputs)
         return outputs
 
 
@@ -91,9 +95,9 @@ class BaseAgentDQN_Quantum:
         self.epsilon = 1.0
         self.epsilon_min = 0.01
         self.epsilon_decay = 0.99
-        self.loss_func = tf.keras.losses.MeanSquaredError()
-        # self.loss_func = tf.keras.losses.Huber()
-        self.optimizer = tf.keras.optimizers.SGD(learning_rate=0.001)
+        # self.loss_func = tf.keras.losses.MeanSquaredError()
+        self.loss_func = tf.keras.losses.Huber()
+        self.optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
         self.gamma = 0.99  # Discount factor
 
         # Create Quantum Deep Q Network
@@ -105,7 +109,7 @@ class BaseAgentDQN_Quantum:
 
         index = self.buffer_counter % self.buffer_capacity
         self.state_buffer[index] = obs_tuple[0]
-        self.action_buffer[index] = obs_tuple[1] - self.action_mapper.minVal
+        self.action_buffer[index] = obs_tuple[1] - self.action_mapper.minVal   # Only record the indices of action
         self.reward_buffer[index] = obs_tuple[2]
         self.next_state_buffer[index] = obs_tuple[3]
         self.buffer_counter += 1
@@ -144,28 +148,20 @@ class BaseAgentDQN_Quantum:
         # print(f"reward_sample: {reward_sample}")
         # print(f"next_state_sample: {next_state_sample}")
 
+        target_q_vals = tf.reduce_max(self.target_model(next_state_sample), axis=1)
+
+        reward_sample = tf.cast(reward_sample, tf.float64)
+        y = reward_sample + tf.expand_dims(self.gamma * target_q_vals, axis=1)
+
+        mask = tf.one_hot(action_sample_int, self.action_space)
+        mask = tf.cast(mask, tf.float64)
+
         with tf.GradientTape() as tape:
-            q_vals = self.model(state_sample, training=True)
-            # print(f"q_vals shape: {q_vals} - {q_vals.shape}")
-
-            target_q_vals = tf.reduce_max(self.target_model(next_state_sample, training=True), axis=1)
-            # print(f"target_q_vals shape: {target_q_vals} - {target_q_vals.shape}")
-
-            reward_sample = tf.cast(reward_sample, tf.float64)
-            # print(f"reward_sample: {reward_sample.dtype}")
-            # print(f"target_q_vals: {target_q_vals.dtype}")
-            y = reward_sample + tf.expand_dims(self.gamma * target_q_vals, axis=1)
-            # print(f"y: {y} - {y.dtype}")
-
-            mask = tf.one_hot(action_sample_int, self.action_space)
-            mask = tf.cast(mask, tf.float64)
-            # print(f"mask shape: {mask.dtype}")
+            q_vals = self.model(state_sample)
 
             q_action = tf.reduce_sum(tf.multiply(q_vals, mask), axis=1)
-            # print(f"q_action shape: {q_action} - {q_action.shape}")
 
             loss = self.loss_func(y, q_action)
-            # print(f"loss shape: {loss} - {loss.shape}\n\n")
 
         grads = tape.gradient(loss, self.model.trainable_variables)
         self.optimizer.apply_gradients(zip(grads, self.model.trainable_variables))
@@ -175,8 +171,9 @@ class BaseAgentDQN_Quantum:
     # @tf.function
     def update_target(self, tau=0.001):
         # Update target actor
-        for (a, b) in zip(self.target_model.variables, self.model.variables):
-            a.assign(b * tau + (1 - tau))
+        self.target_model.set_weights(self.model.get_weights())
+        # for (a, b) in zip(self.target_model.variables, self.model.variables):
+        #     a.assign(b * tau + (1 - tau))
 
     def save_model_weights(self):
         file_path = f"save_dqn/rl/save_models/model_dqn.keras"
@@ -190,7 +187,7 @@ class BaseAgentDQN_Quantum:
 
 
 class PowerContrlAgent_Quantum(BaseAgentDQN_Quantum):
-    def __init__(self, Lmin, Lmax, buffer_capacity=int(1e4), batch_size=128):
+    def __init__(self, Lmin, Lmax, buffer_capacity=int(1e4), batch_size=32):
         state_space = 3   # [Hn, sum dn, Pk]
         action_space = (Lmax - Lmin + 1)
         action_mapper = ActionMapper(Lmin, Lmax)
@@ -202,7 +199,7 @@ class PowerContrlAgent_Quantum(BaseAgentDQN_Quantum):
 
 
 class ResourceAllocationAgent_Quantum(BaseAgentDQN_Quantum):
-    def __init__(self, Rmin, Rmax, buffer_capacity=int(1e4), batch_size=128):
+    def __init__(self, Rmin, Rmax, buffer_capacity=int(1e4), batch_size=32):
         state_space = 3   # [Hn, sum dn]
         action_space = (Rmax - Rmin + 1)
         action_mapper = ActionMapper(Rmin, Rmax)

@@ -8,7 +8,7 @@ from agents_dqn import *
 from agents_qdqn import *
 
 # -- Global Variables
-# tf.get_logger().setLevel('ERROR')
+tf.get_logger().setLevel('ERROR')
 # tf.keras.backend.set_floatx('float64')
 
 # -- Functions
@@ -46,7 +46,7 @@ def local_train(env, local_models):
                 local_models[k*4+n] = local_model
 
         # # 3. After allocating RBs, update the queue
-        # env.oran.update_ue_queue()
+        env.oran.update_ue_queue()
 
         # 4. Clear and release RBs
         env.oran.update_ue_rbs()
@@ -91,6 +91,8 @@ def fed_avg(global_model, local_models):
     local_weights = [local_model.model.get_weights() for local_model in local_models]
     for weight_list_tuple in zip(*local_weights):
         avg_weight.append(np.mean(np.array(weight_list_tuple), axis=0))
+
+    # avg_weight = np.array(avg_weight)
 
     global_model.model.set_weights(avg_weight)
 
@@ -176,5 +178,5 @@ def train(train_mode='irl', model_type='dnn', save=False):
             save_lists(file_path, ep_reward_list, ep_mean_reward_list, avg_reward_list, loss_by_iter_list)
 
 
-train(train_mode='frl', model_type='qnn', save=True)
-train(train_mode='irl', model_type='qnn', save=True)
+train(train_mode='frl', model_type='dnn', save=True)
+# train(train_mode='irl', model_type='qnn', save=True)

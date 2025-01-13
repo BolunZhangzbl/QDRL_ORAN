@@ -73,4 +73,4 @@ def plot_convergence(metric, str_lambda='3366', model_type='both'):
     plt.show()
 
 
-plot_convergence(metric='loss', str_lambda='60606060', model_type='both')
+plot_convergence(metric='reward', str_lambda='60606060', model_type='both')

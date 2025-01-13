@@ -129,18 +129,22 @@ class BaseAgentDQN:
         # print(f"reward_sample: {reward_sample}")
         # print(f"next_state_sample: {next_state_sample}")
 
+        target_q_vals = tf.reduce_max(self.target_model(next_state_sample), axis=1)
+        y = reward_sample + tf.expand_dims(self.gamma * target_q_vals, axis=1)
+        mask = tf.one_hot(action_sample_int, self.action_space)
+
         with tf.GradientTape() as tape:
-            q_vals = self.model(state_sample, training=True)
+            q_vals = self.model(state_sample)
             # print(f"q_vals shape: {q_vals} - {q_vals.shape}")
 
-            target_q_vals = tf.reduce_max(self.target_model(next_state_sample, training=True), axis=1)
+            # target_q_vals = tf.reduce_max(self.target_model(next_state_sample), axis=1)
             # print(f"target_q_vals shape: {target_q_vals} - {target_q_vals.shape}")
 
-            y = reward_sample + tf.expand_dims(self.gamma * target_q_vals, axis=1)
+            # y = reward_sample + tf.expand_dims(self.gamma * target_q_vals, axis=1)
             # print(f"reward_sample shape: {reward_sample} - {reward_sample.shape}")
             # print(f"y shape: {y} - {y.shape}")
 
-            mask = tf.one_hot(action_sample_int, self.action_space)
+            # mask = tf.one_hot(action_sample_int, self.action_space)
             # print(f"mask shape: {mask} - {mask.shape}")
 
             q_action = tf.reduce_sum(tf.multiply(q_vals, mask), axis=1)
@@ -157,8 +161,9 @@ class BaseAgentDQN:
     # @tf.function
     def update_target(self, tau=0.001):
         # Update target actor
-        for (a, b) in zip(self.target_model.variables, self.model.variables):
-            a.assign(b * tau + (1 - tau))
+        self.target_model.set_weights(self.model.get_weights())
+        # for (a, b) in zip(self.target_model.variables, self.model.variables):
+        #     a.assign(b * tau + (1 - tau))
 
     def save_model_weights(self):
         file_path = f"save_dqn/rl/save_models/model_dqn.keras"
