@@ -261,7 +261,7 @@ class ORAN:
 
                     # 4. Update info in the self.RBs
                     # 4.1 Find the indices of available RBs
-                    indices_zero = list(itertools.islice((rb.rth for rb in self.RBs if rb.is_allocated==False), 3))
+                    indices_zero = list(itertools.islice((rb.rth for rb in self.RBs if rb.is_allocated==False), rbs_dist_intra[m]))
                     # 4.2 Update self.RBs
                     for r in indices_zero:
                         self.RBs[r].kth = k
