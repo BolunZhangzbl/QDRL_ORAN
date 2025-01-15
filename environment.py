@@ -27,13 +27,13 @@ class SlicingEnv():
 
     def get_state_info(self, kth, nth):
         # Ensure Hn is a scalar
-        Hn = self.oran.BSs[kth].slices[nth].queue_total  # Convert to float if not already scalar
+        Hn = self.oran.BSs[kth].slices[nth].queue_total   # Convert to float if not already scalar
 
         # Ensure dm is a scalar (sum should already yield a single value)
         # dm = float(np.sum([self.oran.get_total_delay(kth, nth, m) for m in range(3)]))
 
         # Current service rate
-        Bn = sum([self.oran.BSs[kth].slices[nth].UEs[m].service_rate for m in range(3)])
+        Bn = self.oran.BSs[kth].slices[nth].traffic_total
 
         # number of available in BS kth
         num_rbs_available = int(100 - self.oran.BSs[kth].num_rbs_allocated)
@@ -57,8 +57,6 @@ class SlicingEnv():
             self.done = True
 
         # 3. Get the current state info after performing action
-        # self.next_state.shape == (2,4,2)
-        # self.next_state = np.array([[self.get_state_info(k, n) for n in range(4)] for k in range(2)])
         self.next_state = self.get_state_info(kth, nth)
 
         return self.next_state, self.reward, self.done
@@ -79,7 +77,6 @@ class SlicingEnv():
         # 2. Update unused RBs info if queue is emptied
         self.oran.update_ue_rbs()
         print(f"\nCompleted updating traffic for each slice!!!\n")
-
 
 
 # Define Resource Block class
@@ -208,7 +205,7 @@ class ORAN:
         # mth {0, 1, 2}         Idx of mobile devices
 
         Ckm = self.get_link_capacity(kth, mth)
-        Lm = self.BSs[kth].slices[nth].UEs[mth].get_queue_length_bits()
+        Lm = self.BSs[kth].slices[nth].UEs[mth].queue_length
 
         tx_delay = Lm / Ckm if Ckm!=0 else Lm/0.001
 
@@ -236,8 +233,9 @@ class ORAN:
         Ckms = [self.get_link_capacity(kth, m) for m in range(3)]
         UEs = self.BSs[kth].slices[nth].UEs
 
-        tx_rates = [ue.service_rate_avg for ue in UEs]
-        ppf_dist = [Ckms[idx]/tx_rates[idx] if tx_rates[idx]!=0 else 0 for idx in range(3)]
+        avg_tx_rates = [ue.service_rate_avg for ue in UEs]
+        # ppf_dist = [Ckms[idx]/avg_tx_rates[idx] if avg_tx_rates[idx]!=0 else 0 for idx in range(3)]
+        ppf_dist = [UEs[idx].queue_length for idx in range(3)]
 
         if np.sum(ppf_dist) == 0:
             ppf_dist = np.random.randint(100, size=3)
@@ -268,9 +266,6 @@ class ORAN:
             slice.num_rbs_allocated += rbs_dist_intra[m]
             slice.UEs[m].num_rbs_allocated += rbs_dist_intra[m]
 
-            Ckm = self.get_link_capacity(kth, m)
-            slice.UEs[m].update_service_rate(Ckm)
-
             # 3. Update info in self.RBs
             # 3.1 Find the indices of available RBs
             indices_zero = list(itertools.islice((rb.rth for rb in self.BSs[kth].RBs if rb.is_allocated == False), rbs_dist_intra[m]))
@@ -284,8 +279,9 @@ class ORAN:
                 # 3.3 Add the indices of RBs to UE for easier release
                 slice.UEs[m].rbs_indices.append(r)
 
-        # 4. Update queue
-        slice.update_queue()
+            # 4. Update service rate
+            Ckm = self.get_link_capacity(kth, m)
+            slice.UEs[m].update_service_rate(Ckm)
 
     # def set_power(self, a):
     #     # a.shape == (2, 1)
@@ -302,14 +298,15 @@ class ORAN:
 
     def get_slice_reward(self, kth, nth):
         slice = self.BSs[kth].slices[nth]
-        if slice.queue_total != 0:
-            if slice.slice_type.startswith('embb'):
-                reward = np.arctan(self.BSs[kth].slices[nth].traffic_total)   # traffic_total == throughput
-            else:
-                reward = 1 - np.sum([self.get_total_delay(kth, nth, m) for m in range(3)])   #
-                # reward = 1 - np.arctan(np.sum([self.get_total_delay(kth, nth, m) for m in range(3)]))
+
+        if slice.slice_type.startswith('embb'):
+            # reward = np.arctan(self.BSs[kth].slices[nth].traffic_total)   # traffic_total == throughput
+            reward = slice.traffic_total   # bits
         else:
-            reward = 0
+            # reward = 1 - self.BSs[kth].slices[nth].queue_total  #
+            # reward = 1 - np.arctan(self.BSs[kth].slices[nth].queue_total)
+            reward = -1.0 * slice.queue_total   # bits
+
         # Multiply by its weight
         reward *= slice.slice_weight
 
@@ -403,7 +400,8 @@ class Slice:
             ue.update_queue()
 
         self.traffic_total = np.sum([ue.service_rate for ue in self.UEs])
-        self.queue_total = np.sum([ue.queue_length for ue in self.UEs])
+        self.queue_total = np.sum([ue.get_queue_length_bits() for ue in self.UEs])
+
 
 class UE:
     """

@@ -1,7 +1,6 @@
 # -- Public Imports
 
 # -- Private Imports
-import numpy as np
 
 from environment import *
 from agents_dqn import *
@@ -10,6 +9,7 @@ from agents_qdqn import *
 # -- Global Variables
 tf.get_logger().setLevel('ERROR')
 # tf.keras.backend.set_floatx('float64')
+
 
 # -- Functions
 
@@ -45,8 +45,9 @@ def local_train(env, local_models):
                 # Assign the updated local model to list
                 local_models[k*4+n] = local_model
 
-        # # 3. After allocating RBs, update the queue
-        env.oran.update_ue_queue()
+                # # 3. After allocating RBs, update the queue
+                # env.oran.update_ue_queue()
+                env.oran.BSs[k].slices[n].update_queue()
 
         # 4. Clear and release RBs
         env.oran.update_ue_rbs()
@@ -103,7 +104,7 @@ def train(train_mode='irl', model_type='dnn', save=False):
 
     env = SlicingEnv()
     agent_class = ResourceAllocationAgent if model_type == 'dnn' else ResourceAllocationAgent_Quantum
-    local_models = [agent_class(Rmin=0, Rmax=7) for _ in range(2*4)]
+    local_models = [agent_class(Rmin=0, Rmax=15) for _ in range(2*4)]
 
     ep_reward_list = []
     ep_mean_reward_list = []
@@ -111,7 +112,7 @@ def train(train_mode='irl', model_type='dnn', save=False):
     loss_by_iter_list = []
 
     if train_mode == 'frl':
-        global_model = agent_class(Rmin=0, Rmax=7)
+        global_model = agent_class(Rmin=0, Rmax=15)
 
     try:
 
@@ -149,11 +150,11 @@ def train(train_mode='irl', model_type='dnn', save=False):
                             print(f"{kth_tmp:<5}{rb.rth:<5}{rb.kth:<5}{rb.nth:<5}{rb.mth:<5}{str(rb.is_allocated):<15}{rb.power:<10.2f}")
 
                     # Display UEs info
-                    print(f"{'service_rate':<15}{'delay':<10}{'packet_size':<15}{'allocated_rbs':<15}")
-                    print("-" * 60)
+                    print(f"{'service_rate':<15}{'queue_length_bits':<20}{'packet_size':<15}{'allocated_rbs':<15}")
+                    print("-" * 70)
                     UEs = [env.oran.BSs[k].slices[n].UEs[m] for m in range(3) for n in range(4) for k in range(2)]
                     for ue in UEs:
-                        print(f"{ue.service_rate:.6f}    {ue.delay:.6f}    {ue.packet_size:<15}{ue.num_rbs_allocated:<10}")
+                        print(f"{ue.service_rate:<15.2f}{ue.get_queue_length_bits():<20.2f}{ue.packet_size:<15}{ue.num_rbs_allocated:<15}")
 
                 # 4. We perform global training:
                 if train_mode == 'frl':
@@ -179,4 +180,7 @@ def train(train_mode='irl', model_type='dnn', save=False):
 
 
 train(train_mode='frl', model_type='dnn', save=True)
-# train(train_mode='irl', model_type='qnn', save=True)
+train(train_mode='frl', model_type='qnn', save=True)
+
+train(train_mode='irl', model_type='dnn', save=True)
+train(train_mode='irl', model_type='qnn', save=True)

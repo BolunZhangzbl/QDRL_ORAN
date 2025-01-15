@@ -1,5 +1,6 @@
 # -- Public Imports
 import os
+import math
 import random
 import numpy as np
 import tensorflow as tf
@@ -54,9 +55,10 @@ def create_circuit(dev, num_qubits):
 # Global Model for FDRL - similar to Critic Network
 
 class QCircuitKeras(tf.keras.models.Model):
-    def __init__(self, **kwargs):
-        super(QCircuitKeras, self).__init__(**kwargs)
+    def __init__(self, action_space, **kwargs):
+        super(QCircuitKeras, self).__init__(action_space, **kwargs)
 
+        num_qubits = int(math.sqrt(action_space))
         dev = qml.device("default.qubit", wires=num_qubits)
         qcircuit = create_circuit(dev, num_qubits)
         weight_shapes = {"weights": (num_layers, num_qubits, 1)}
@@ -101,8 +103,8 @@ class BaseAgentDQN_Quantum:
         self.gamma = 0.99  # Discount factor
 
         # Create Quantum Deep Q Network
-        self.model = QCircuitKeras()
-        self.target_model = QCircuitKeras()
+        self.model = QCircuitKeras(self.action_space)
+        self.target_model = QCircuitKeras(self.action_space)
 
     def record(self, obs_tuple):
         assert len(obs_tuple) == 4
