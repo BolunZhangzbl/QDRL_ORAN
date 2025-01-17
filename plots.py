@@ -85,6 +85,7 @@ def plot_convergence(
     plt.show()
 
 
-plot_convergence(metric='reward', str_lambda='20204040', model_type='both')
-plot_convergence(metric='reward', str_lambda='30306060', model_type='both')
-plot_convergence(metric='reward', str_lambda='40408080', model_type='both')
+# plot_convergence(metric='reward', str_lambda='20204040', model_type='both')
+# plot_convergence(metric='reward', str_lambda='30306060', model_type='both')
+# plot_convergence(metric='reward', str_lambda='40408080', model_type='both')
+plot_convergence(metric='avg_reward', str_lambda='6060120120', model_type='both')

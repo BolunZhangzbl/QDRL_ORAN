@@ -181,4 +181,4 @@ def train(train_mode='irl', model_type='dnn', save=False):
 # train(train_mode='irl', model_type='qnn', save=True)
 
 train(train_mode='frl', model_type='dnn', save=True)
-# train(train_mode='frl', model_type='qnn', save=True)
+train(train_mode='frl', model_type='qnn', save=True)

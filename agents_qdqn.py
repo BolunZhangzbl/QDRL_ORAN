@@ -64,14 +64,10 @@ class QCircuitKeras(tf.keras.models.Model):
         weight_shapes = {"weights": (num_layers, num_qubits, 1)}
         self.qmodel = qml.qnn.KerasLayer(qcircuit, weight_shapes, output_dim=num_qubits,
                                          name='qmodel', dtype=tf.float64)
-        # self.d1 = Dense(3, activation='relu')
-        # self.d2 = Dense(8, activation='linear')
 
     def call(self, inputs):
 
-        # inputs = self.d1(inputs)
         outputs = self.qmodel(inputs)
-        # outputs = self.d2(outputs)
         return outputs
 
 

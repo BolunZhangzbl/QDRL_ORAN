@@ -37,10 +37,10 @@ dict_packet_size = dict(
 )
 
 dict_poisson_lambda = dict(
-    urllc2=30,
-    urllc1=30,
-    embb2=60,
-    embb1=60
+    urllc2=60,
+    urllc1=60,
+    embb2=120,
+    embb1=120
 )
 
 dict_reward_done = dict(
@@ -67,7 +67,6 @@ last_n = 10
 
 ### Hyper-parameters for Quantum DQN
 num_layers = 3
-num_qubits = 3
 
 
 """
