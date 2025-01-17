@@ -58,7 +58,7 @@ class QCircuitKeras(tf.keras.models.Model):
     def __init__(self, action_space, **kwargs):
         super(QCircuitKeras, self).__init__(action_space, **kwargs)
 
-        num_qubits = int(math.sqrt(action_space))
+        num_qubits = int(math.log2(action_space))
         dev = qml.device("default.qubit", wires=num_qubits)
         qcircuit = create_circuit(dev, num_qubits)
         weight_shapes = {"weights": (num_layers, num_qubits, 1)}

@@ -49,8 +49,8 @@ def local_train(env, local_models):
                 # env.oran.update_ue_queue()
                 env.oran.BSs[k].slices[n].update_queue()
 
-        # 4. Clear and release RBs
-        env.oran.update_ue_rbs()
+                # 4. Clear and release RBs
+                env.oran.update_slice_rbs(k, n)
 
     reward_step /= num_rounds_local
     loss_step /= num_rounds_local
@@ -93,8 +93,6 @@ def fed_avg(global_model, local_models):
     for weight_list_tuple in zip(*local_weights):
         avg_weight.append(np.mean(np.array(weight_list_tuple), axis=0))
 
-    # avg_weight = np.array(avg_weight)
-
     global_model.model.set_weights(avg_weight)
 
 
@@ -104,7 +102,7 @@ def train(train_mode='irl', model_type='dnn', save=False):
 
     env = SlicingEnv()
     agent_class = ResourceAllocationAgent if model_type == 'dnn' else ResourceAllocationAgent_Quantum
-    local_models = [agent_class(Rmin=0, Rmax=15) for _ in range(2*4)]
+    local_models = [agent_class(Rmin=0, Rmax=7) for _ in range(2*4)]
 
     ep_reward_list = []
     ep_mean_reward_list = []
@@ -112,7 +110,7 @@ def train(train_mode='irl', model_type='dnn', save=False):
     loss_by_iter_list = []
 
     if train_mode == 'frl':
-        global_model = agent_class(Rmin=0, Rmax=15)
+        global_model = agent_class(Rmin=0, Rmax=7)
 
     try:
 
@@ -139,7 +137,7 @@ def train(train_mode='irl', model_type='dnn', save=False):
                 episodic_reward += reward_step
                 ep_mean_reward_list.append(reward_step)
                 loss_by_iter_list.append(loss_step)
-                print(f"step/episode: {step}/{ep} - Loss: {loss_step:.6e} - Reward: {reward_step:.6e}")
+                print(f"model: {model_type} - train mode: {train_mode} - step/episode: {step}/{ep} - Loss: {loss_step:.6e} - Reward: {reward_step:.6e}")
 
                 if step%25 == 0:
                     # Display RBs info
@@ -179,8 +177,8 @@ def train(train_mode='irl', model_type='dnn', save=False):
             save_lists(file_path, ep_reward_list, ep_mean_reward_list, avg_reward_list, loss_by_iter_list)
 
 
-train(train_mode='frl', model_type='dnn', save=True)
-train(train_mode='frl', model_type='qnn', save=True)
+# train(train_mode='irl', model_type='dnn', save=True)
+# train(train_mode='irl', model_type='qnn', save=True)
 
-train(train_mode='irl', model_type='dnn', save=True)
-train(train_mode='irl', model_type='qnn', save=True)
+train(train_mode='frl', model_type='dnn', save=True)
+# train(train_mode='frl', model_type='qnn', save=True)

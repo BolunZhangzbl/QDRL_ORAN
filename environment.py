@@ -62,8 +62,6 @@ class SlicingEnv():
         return self.next_state, self.reward, self.done
 
     def reset(self, kth, nth):
-        # self.state.shape == (2,4,2)
-        # self.state = np.array([[self.get_state_info(k, n) for n in range(4)] for k in range(2)])
         self.state = self.get_state_info(kth, nth)
         self.reward = 0
         self.done = False
@@ -195,8 +193,8 @@ class ORAN:
 
     def get_link_capacity(self, kth, mth):
         Ckm = 0
-        for rth in range(num_rbs):
-            Ckm += self.Br * np.log2(1 + self.get_sinr(kth, rth, mth))
+        for r in range(num_rbs):
+            Ckm += self.Br * np.log2(1 + self.get_sinr(kth, r, mth))
 
         return Ckm
 
@@ -322,6 +320,21 @@ class ORAN:
             for n in range(4):
                 self.BSs[k].slices[n].update_queue()
 
+    def update_slice_rbs(self, kth, nth):
+        for m in range(3):
+            ue = self.BSs[kth].slices[nth].UEs[m]
+            if ue.queue_length == 0:
+                # 1. Update RBs info
+                for r in ue.rbs_indices:
+                    self.BSs[kth].RBs[r].reset()
+
+                    # 2. Reduce the available RBs number in the slice and BS
+                    self.BSs[kth].slices[nth].num_rbs_allocated -= 1
+                    self.BSs[kth].num_rbs_allocated -= 1
+
+                # 3. Update UE info
+                ue.reset()
+
     def update_ue_rbs(self):
         for k in range(self.num_gnbs):
             for n in range(4):
@@ -440,6 +453,9 @@ class UE:
 
         # Step 2: Update queue length
         self.queue_length += int(packets_per_sec)
+
+        # Ensure that queue length do not exceed max queue length
+        # self.queue_length = min(self.queue_length, self.max_queue_length)
 
         # Ensure queue length is non-negative
         self.queue_length = max(self.queue_length, 0)

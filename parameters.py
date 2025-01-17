@@ -2,8 +2,8 @@
 
 bandwidth = 20 * int(1e6)  # 20 MHz
 num_rbs = 100
-bandwidth_per_rb = bandwidth / num_rbs
-# bandwidth_per_rb = int(1.8e4)   # 180 kHz per RB
+# bandwidth_per_rb = bandwidth / num_rbs
+bandwidth_per_rb = int(1.8e5)   # 180 kHz per RB
 num_subcarriers_per_rb = 12
 P_max = 40   # 40 dBm for maximum transmission power
 tx_rx_ant_gain = 15   # 15 dB for Tx/Rx antenna gain
@@ -17,7 +17,7 @@ d_inter_gnb = 500   # Distance between 2 BSs
 
 TTI = (1 / 15000) * 2   # Transmission Time Interval (s), subcarrier spacing = 15kHz
 
-N0 = 3.98*1e-15   # Noise Power Density (W/Hz), Power of AWGN, sigma^2
+N0 = 3.98e-21   # Noise Power Density (W/Hz), Power of AWGN, sigma^2
 # N0 = -114   # Noise Power Density (dBm)
 
 bits_per_byte = 8
@@ -37,19 +37,16 @@ dict_packet_size = dict(
 )
 
 dict_poisson_lambda = dict(
-    urllc2=40,
-    urllc1=40,
-    embb2=80,
-    embb1=80
+    urllc2=30,
+    urllc1=30,
+    embb2=60,
+    embb1=60
 )
 
 dict_reward_done = dict(
     power=10,
     resource=20,
 )
-
-alpha = 0.1   # punishment factor for the reward of power control agent
-
 
 ### Hyper-parameters for MADQN
 
@@ -59,13 +56,13 @@ num_rounds_local = 1
 
 last_n = 10
 
-clip_ratio = 0.2
-actor_lr = 3e-4
-critic_lr = 1e-3
-train_actor_iters = 80
-train_critic_iters = 80
-lam = 0.97
-target_kl = 0.01
+# clip_ratio = 0.2
+# actor_lr = 3e-4
+# critic_lr = 1e-3
+# train_actor_iters = 80
+# train_critic_iters = 80
+# lam = 0.97
+# target_kl = 0.01
 
 
 ### Hyper-parameters for Quantum DQN
