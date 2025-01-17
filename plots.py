@@ -76,7 +76,7 @@ def plot_convergence(
 
     plt.xlabel('Iter', fontsize=30)
     plt.ylabel(dict_ylabel.get(metric), fontsize=30)
-    plt.xlim([0, 400])
+    # plt.xlim([0, 400])
     # plt.ylim([10000, 12000])
     plt.xticks(fontsize=24)
     plt.yticks(fontsize=24)
@@ -86,5 +86,5 @@ def plot_convergence(
 
 
 plot_convergence(metric='reward', str_lambda='20204040', model_type='both')
-# plot_convergence(metric='reward', str_lambda='30306060', model_type='both')
-# plot_convergence(metric='reward', str_lambda='40408080', model_type='both')
+plot_convergence(metric='reward', str_lambda='30306060', model_type='both')
+plot_convergence(metric='reward', str_lambda='40408080', model_type='both')
