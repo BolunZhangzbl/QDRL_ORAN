@@ -3,8 +3,8 @@
 # -- Private Imports
 
 from environment import *
-from agents_dqn import *
-from agents_qdqn import *
+from agents_ddpg import *
+from agents_qddpg import *
 
 # -- Global Variables
 tf.get_logger().setLevel('ERROR')
@@ -38,8 +38,7 @@ def local_train(env, local_models):
                 reward_step += reward/8
 
                 local_model.record((prev_state, action, reward, state))
-                loss, q_vals = local_model.update()
-                # loss, q_vals = local_model.update_fedprox()
+                loss = local_model.update()
                 local_model.update_target()
                 loss_step += loss/8
 

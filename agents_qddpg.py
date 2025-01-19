@@ -1,5 +1,6 @@
 # -- Public Imports
 import os
+import math
 import random
 import numpy as np
 import tensorflow as tf
@@ -7,19 +8,73 @@ from tensorflow.keras.layers import Input, Dense, GaussianNoise, Lambda, Dropout
     Reshape, Add, Embedding, Flatten, Conv1D, BatchNormalization, Embedding, LSTM, Activation
 from tensorflow.keras.models import Model
 
+import pennylane as qml
+from pennylane.templates import StronglyEntanglingLayers, BasicEntanglerLayers
+
 # -- Private Imports
 from parameters import *
+from utils import *
 
 # -- Global Variables
 
 
 # -- Functions
 
+def create_circuit(dev, num_qubits):
+    if dev is None:
+        dev = qml.device("default.qubit", wires=num_qubits)
+
+    def layer1(layer_weights):
+        """
+        q layer for fading:
+        :param layer_weights:
+        :return:
+        """
+        for wire in range(num_qubits):
+            qml.RY(layer_weights[wire, 0]*np.pi, wires=wire)
+        for wire in range(0, num_qubits - 1):
+            qml.CNOT(wires=[wire, (wire + 1)])
+
+        # for wire in range(0, num_qubits):
+        #     qml.CNOT(wires=[wire, (wire+1)%num_qubits])
+
+    @qml.qnode(dev, interface='tf', diff_method='best')
+    def qcircuit(inputs, weights):
+
+        qml.AngleEmbedding(inputs, wires=range(num_qubits), rotation='Y')
+
+        for layer_weights in weights:
+            layer1(layer_weights)
+
+        return [qml.expval(qml.PauliZ(ind)) for ind in range(num_qubits)]
+
+    return qcircuit
+
+
+# Global Model for FDRL - similar to Critic Network
+
+class QCircuitKeras(tf.keras.models.Model):
+    def __init__(self, action_space, **kwargs):
+        super(QCircuitKeras, self).__init__(action_space, **kwargs)
+
+        num_qubits = action_space
+        dev = qml.device("default.qubit", wires=num_qubits)
+        qcircuit = create_circuit(dev, num_qubits)
+        weight_shapes = {"weights": (num_layers, num_qubits, 1)}
+        self.qmodel = qml.qnn.KerasLayer(qcircuit, weight_shapes, output_dim=num_qubits,
+                                         name='qmodel', dtype=tf.float64)
+        self.relu = Activation('relu')
+
+    def call(self, inputs):
+
+        outputs = self.qmodel(inputs)
+        outputs = self.relu(outputs)
+        return outputs
+
 
 # Base Agent for DQN
-class BaseAgentDDPG:
-    def __init__(self, state_space, action_space, upper_bound,
-                 buffer_capacity=int(1e4), batch_size=128):
+class BaseAgentDDPG_Quantum:
+    def __init__(self, state_space, action_space, upper_bound, buffer_capacity=int(1e4), batch_size=128):
         self.state_space = state_space
         self.action_space = action_space
         self.upper_bound = upper_bound
@@ -30,7 +85,7 @@ class BaseAgentDDPG:
         self.buffer_counter = 0
 
         self.state_buffer = np.zeros((self.buffer_capacity, self.state_space))
-        self.action_buffer = np.zeros((self.buffer_capacity, 3))
+        self.action_buffer = np.zeros((self.buffer_capacity, self.action_space))
         self.reward_buffer = np.zeros((self.buffer_capacity, 1))
         self.next_state_buffer = np.zeros((self.buffer_capacity, self.state_space))
 
@@ -44,22 +99,15 @@ class BaseAgentDDPG:
         self.upper_bound = np.ones((action_space, )) * self.upper_bound
 
         # Create Actors & Critics
-        self.actor = self.create_actor()
-        self.target_actor = self.create_actor()
-        # print(self.actor.summary())
 
+        ### Create Quantum Actor
+        self.actor = QCircuitKeras(self.action_space)
+        self.target_actor = QCircuitKeras(self.action_space)
+        self.target_actor.set_weights(self.actor.get_weights())
+
+        ### Create Classical Critic
         self.critic = self.create_critic()
         self.target_critic = self.create_critic()
-        # print(self.critic.summary())
-
-    def create_actor(self):
-        input_shape = (self.state_space,)
-        X_input = Input(input_shape)
-        X = Dense(64, activation="relu")(X_input)
-        X = Dense(64, activation="relu")(X)
-        X = Dense(self.action_space, activation="relu")(X)
-        model = Model(inputs=X_input, outputs=X)
-        return model
 
     def create_critic(self):
         # State
@@ -93,15 +141,10 @@ class BaseAgentDDPG:
 
     def act(self, state):
         # Deterministic Policy
-        if state.ndim == 1:
-            state = np.expand_dims(state, axis=0)
-
         action = self.actor.predict(state, verbose=0)
-        # print(f"action before clip: {action}")
 
         # Clip
         action = np.clip(action, self.lower_bound, self.upper_bound)
-        # print(f"action after clip: {action}")
 
         return action
 
@@ -144,9 +187,10 @@ class BaseAgentDDPG:
         for (a, b) in zip(self.target_critic.variables, self.critic.variables):
             a.assign(b * tau + (1 - tau))
 
-class PowerContrlAgent(BaseAgentDDPG):
+
+class PowerContrlAgent_Quantum(BaseAgentDDPG_Quantum):
     def __init__(self, Lmin, Lmax, buffer_capacity=int(1e4), batch_size=32):
-        state_space = 3   # [Hn, sum dn, Pk]
+        state_space = 3  # [Hn, sum dn, Pk]
         action_space = 3
         upper_bound = (Lmax - Lmin + 1)
 
@@ -156,9 +200,9 @@ class PowerContrlAgent(BaseAgentDDPG):
         self.Lmin = Lmin   # Lower bound for action
 
 
-class ResourceAllocationAgent(BaseAgentDDPG):
+class ResourceAllocationAgent_Quantum(BaseAgentDDPG_Quantum):
     def __init__(self, Rmin, Rmax, buffer_capacity=int(1e4), batch_size=32):
-        state_space = 3   # [Hn, sum dn]
+        state_space = 3  # [Hn, sum dn]
         action_space = 3
         upper_bound = (Rmax - Rmin + 1)
 

@@ -47,7 +47,7 @@ class SlicingEnv():
 
         # 1. Perform the action at ORAN
 
-        # action.shape == (1,)
+        # action.shape == (3,)
         self.oran.set_rbs(action, kth, nth)
 
         # 2. Calculate the reward
@@ -220,53 +220,38 @@ class ORAN:
 
         return total_delay
 
-    def intra_slice_allocate_ppf(self, kth, nth, sum_rbs):
-        """
-        :return: the idx of the UE for PPF allocation
-        """
-        # nth {0, 1, 2, 3}      Idx of Slice
-        # mth {0, 1, 2}         Idx of mobile devices
-        assert isinstance(sum_rbs, (int, np.integer))
+    def set_rbs(self, rbs_dist, kth, nth):
+        rbs_dist = rbs_dist.astype(int)
 
-        Ckms = [self.get_link_capacity(kth, m) for m in range(3)]
-        UEs = self.BSs[kth].slices[nth].UEs
-
-        avg_tx_rates = [ue.service_rate_avg for ue in UEs]
-        # ppf_dist = [Ckms[idx]/avg_tx_rates[idx] if avg_tx_rates[idx]!=0 else 0 for idx in range(3)]
-        ppf_dist = [UEs[idx].queue_length for idx in range(3)]
-
-        if np.sum(ppf_dist) == 0:
-            ppf_dist = np.random.randint(100, size=3)
-        ppf_dist_total = sum(ppf_dist)
-        rbs_dist_intra = [round(sum_rbs * dist / ppf_dist_total) for dist in ppf_dist]
-
-        # Adjust if there is a rounding issue (e.g., the sum of result isn't equal to integer)
-        diff = sum_rbs - sum(rbs_dist_intra)
-        for i in range(diff):
-            rbs_dist_intra[i % len(rbs_dist_intra)] += 1
-
-        return rbs_dist_intra
-
-    def set_rbs(self, rbs, kth, nth):
         ### Check if there is available RBs in BS
-        rbs = min(rbs, 100-self.BSs[kth].num_rbs_allocated)
+        rbs_dist = np.squeeze(rbs_dist)
+        rbs_sum = sum(rbs_dist)
+        if rbs_sum == 0:
+            return
+
+        rbs_sum = min(rbs_sum, 100-self.BSs[kth].num_rbs_allocated)
+        rbs_dist =[round(rbs_sum*dist/sum(rbs_dist)) for dist in rbs_dist]
+
+        # Adjustment
+        diff = rbs_sum - sum(rbs_dist)
+        for i in range(diff):
+            rbs_dist[i % len(rbs_dist)] += 1
 
         # 0. Allocate RBs to the BS
-        self.BSs[kth].num_rbs_allocated += rbs
+        self.BSs[kth].num_rbs_allocated += rbs_sum
 
         slice = self.BSs[kth].slices[nth]
         # 1. Allocate RBs to the slice
-        slice.num_rbs_allocated += rbs
+        slice.num_rbs_allocated += rbs_sum
 
-        # 2. Intra-slice RBs allopcation to UEs using PPF
-        rbs_dist_intra = self.intra_slice_allocate_ppf(kth, nth, rbs)
-        for m in range(len(rbs_dist_intra)):
-            slice.num_rbs_allocated += rbs_dist_intra[m]
-            slice.UEs[m].num_rbs_allocated += rbs_dist_intra[m]
+        # 2. Intra-slice RBs allopcation to UEs using DDPG directly
+        for m in range(len(rbs_dist)):
+            slice.num_rbs_allocated += rbs_dist[m]
+            slice.UEs[m].num_rbs_allocated += rbs_dist[m]
 
             # 3. Update info in self.RBs
             # 3.1 Find the indices of available RBs
-            indices_zero = list(itertools.islice((rb.rth for rb in self.BSs[kth].RBs if rb.is_allocated == False), rbs_dist_intra[m]))
+            indices_zero = list(itertools.islice((rb.rth for rb in self.BSs[kth].RBs if rb.is_allocated == False), rbs_dist[m]))
             # 3.2 Update self.RBs
             for r in indices_zero:
                 self.BSs[kth].RBs[r].kth = kth
@@ -280,19 +265,6 @@ class ORAN:
             # 4. Update service rate
             Ckm = self.get_link_capacity(kth, m)
             slice.UEs[m].update_service_rate(Ckm)
-
-    # def set_power(self, a):
-    #     # a.shape == (2, 1)
-    #
-    #     for k in range(self.num_gnbs):
-    #         self.BSs[k].bs_power = a
-    #
-    #         indices = [rb.rth for rb in self.BSs[k].RBs if rb.is_allocated == 1 and rb.kth == k]
-    #
-    #         # Ensure the Tx Power is uniformly distributed across all the RBs
-    #         a_uniform = self.BSs[k].bs_power / len(indices)
-    #         for idx in indices:
-    #             self.BSs[k].RBs[idx].power = a_uniform
 
     def get_slice_reward(self, kth, nth):
         slice = self.BSs[kth].slices[nth]

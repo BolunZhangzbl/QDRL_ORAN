@@ -104,6 +104,7 @@ class BaseAgentDQN_Quantum:
         # Create Quantum Deep Q Network
         self.model = QCircuitKeras(self.action_space)
         self.target_model = QCircuitKeras(self.action_space)
+        self.target_model.set_weights(self.model.get_weights())
 
     def record(self, obs_tuple):
         assert len(obs_tuple) == 4
