@@ -23,10 +23,10 @@ N0 = 3.98e-21   # Noise Power Density (W/Hz), Power of AWGN, sigma^2
 bits_per_byte = 8
 
 dict_slice_weights = dict(
-    urllc2=0.25,
-    urllc1=0.25,
-    embb2=0.25,
-    embb1=0.25,
+    urllc2=0.1,
+    urllc1=0.2,
+    embb2=0.3,
+    embb1=0.4,
 )
 
 dict_packet_size = dict(
@@ -37,10 +37,10 @@ dict_packet_size = dict(
 )
 
 dict_poisson_lambda = dict(
-    urllc2=60,
-    urllc1=60,
-    embb2=120,
-    embb1=120
+    urllc2=80,
+    urllc1=80,
+    embb2=160,
+    embb1=160
 )
 
 dict_reward_done = dict(
@@ -68,6 +68,9 @@ last_n = 10
 ### Hyper-parameters for Quantum DQN
 num_layers = 3
 
+
+### Hyper-parameters for FedProx
+mu = 0.1
 
 """
 Power Control xAPP Agent

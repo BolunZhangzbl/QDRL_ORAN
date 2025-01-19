@@ -39,6 +39,7 @@ def local_train(env, local_models):
 
                 local_model.record((prev_state, action, reward, state))
                 loss, q_vals = local_model.update()
+                # loss, q_vals = local_model.update_fedprox()
                 local_model.update_target()
                 loss_step += loss/8
 
@@ -123,17 +124,6 @@ def train(train_mode='irl', model_type='dnn', save=False):
 
                 reward_step, loss_step = local_train(env, local_models)
 
-                # reward_step, loss_step = 0, 0
-                # for k in range(2):
-                #     for n in range(4):
-                #         local_model = local_models[k*4+n]
-                #         reward, loss, local_model = local_train(env, local_model, k, n)
-                #         local_models[k*4+n] = local_model
-                #         reward_step += reward
-                #         loss_step += loss
-                # reward_step = reward_step / 8
-                # loss_step   = loss_step / 8
-
                 episodic_reward += reward_step
                 ep_mean_reward_list.append(reward_step)
                 loss_by_iter_list.append(loss_step)
@@ -177,8 +167,8 @@ def train(train_mode='irl', model_type='dnn', save=False):
             save_lists(file_path, ep_reward_list, ep_mean_reward_list, avg_reward_list, loss_by_iter_list)
 
 
-# train(train_mode='irl', model_type='dnn', save=True)
-# train(train_mode='irl', model_type='qnn', save=True)
+train(train_mode='irl', model_type='dnn', save=True)
+train(train_mode='irl', model_type='qnn', save=True)
 
 train(train_mode='frl', model_type='dnn', save=True)
 train(train_mode='frl', model_type='qnn', save=True)

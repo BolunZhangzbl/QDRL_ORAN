@@ -47,18 +47,19 @@ dict_colors = {
 
 def plot_convergence(
         metric, str_lambda=''.join(str(val) for val in dict_poisson_lambda.values()),
-        model_type='both'):
+        key='both'):
 
     assert metric in dict_filename.keys()
-    assert model_type in ('both', 'qnn', 'dnn')
+    assert key in ('both', 'frl', 'irl')
     file_name = dict_filename.get(metric)
 
-    if model_type == 'both':
+    if key == 'both':
         dict_file_path = {
             f"{model_type}-{key}": os.path.join(dir_base, "save_dqn", model_type, str_lambda, key, "save_lists", file_name) for
-            key in ['frl', 'irl']for model_type in ['qnn', 'dnn'] }
+            key in ['frl', 'irl'] for model_type in ['qnn', 'dnn'] }
     else:
-        dict_file_path = {f"{model_type}-{key}": os.path.join(dir_base, "save_dqn", model_type, str_lambda, key, "save_lists", file_name) for key in ['frl', 'irl']}
+        dict_file_path = {f"{model_type}-{key}": os.path.join(dir_base, "save_dqn", model_type, str_lambda, key, "save_lists", file_name)
+                          for model_type in ['qnn', 'dnn']}
     print(dict_file_path)
 
     dict_metric_list = {key: np.loadtxt(val) for key, val in dict_file_path.items()}
@@ -76,7 +77,7 @@ def plot_convergence(
 
     plt.xlabel('Iter', fontsize=30)
     plt.ylabel(dict_ylabel.get(metric), fontsize=30)
-    # plt.xlim([0, 400])
+    # plt.xlim([0, 200])
     # plt.ylim([10000, 12000])
     plt.xticks(fontsize=24)
     plt.yticks(fontsize=24)
@@ -85,7 +86,8 @@ def plot_convergence(
     plt.show()
 
 
-# plot_convergence(metric='reward', str_lambda='20204040', model_type='both')
-# plot_convergence(metric='reward', str_lambda='30306060', model_type='both')
-# plot_convergence(metric='reward', str_lambda='40408080', model_type='both')
-plot_convergence(metric='avg_reward', str_lambda='6060120120', model_type='both')
+# plot_convergence(metric='reward', str_lambda='20204040', key='both')
+# plot_convergence(metric='reward', str_lambda='30306060', key='both')
+# plot_convergence(metric='reward', str_lambda='40408080', key='frl')
+# plot_convergence(metric='reward', str_lambda='6060120120', key='frl')
+plot_convergence(metric='reward', str_lambda='120120240240', key='both')

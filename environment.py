@@ -300,10 +300,12 @@ class ORAN:
         if slice.slice_type.startswith('embb'):
             # reward = np.arctan(self.BSs[kth].slices[nth].traffic_total)   # traffic_total == throughput
             reward = slice.traffic_total   # bits
-        else:
+        elif slice.slice_type.startswith('urllc'):
             # reward = 1 - self.BSs[kth].slices[nth].queue_total  #
             # reward = 1 - np.arctan(self.BSs[kth].slices[nth].queue_total)
             reward = -1.0 * slice.queue_total   # bits
+        else:
+            reward = slice.traffic_total
 
         # Multiply by its weight
         reward *= slice.slice_weight
