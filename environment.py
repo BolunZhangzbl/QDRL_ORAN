@@ -6,6 +6,7 @@ import numpy as np
 
 # -- Private Imports
 from parameters import *
+from utils import *
 
 # -- Global Variables
 
@@ -299,13 +300,13 @@ class ORAN:
 
         if slice.slice_type.startswith('embb'):
             # reward = np.arctan(self.BSs[kth].slices[nth].traffic_total)   # traffic_total == throughput
-            reward = slice.traffic_total   # bits
+            reward = sigmoid(slice.traffic_total)   # bits
         elif slice.slice_type.startswith('urllc'):
             # reward = 1 - self.BSs[kth].slices[nth].queue_total  #
             # reward = 1 - np.arctan(self.BSs[kth].slices[nth].queue_total)
-            reward = -1.0 * slice.queue_total   # bits
+            reward = -1.0 * sigmoid(slice.queue_total)   # bits
         else:
-            reward = slice.traffic_total
+            reward = sigmoid(slice.traffic_total)
 
         # Multiply by its weight
         reward *= slice.slice_weight

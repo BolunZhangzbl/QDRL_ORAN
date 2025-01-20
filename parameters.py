@@ -51,7 +51,7 @@ dict_reward_done = dict(
 ### Hyper-parameters for MADQN
 
 max_step = 50
-num_episodes = 30
+num_episodes = 60
 num_rounds_local = 1
 
 last_n = 10

@@ -90,4 +90,4 @@ def plot_convergence(
 # plot_convergence(metric='reward', str_lambda='30306060', key='both')
 # plot_convergence(metric='reward', str_lambda='40408080', key='frl')
 # plot_convergence(metric='reward', str_lambda='6060120120', key='frl')
-plot_convergence(metric='reward', str_lambda='120120240240', key='both')
+plot_convergence(metric='reward', str_lambda='8080160160', key='both')
